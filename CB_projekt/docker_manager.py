@@ -27,6 +27,9 @@ SUPPORTED_TEMPLATES = {
         "container_port": 7000,
     }
 }
+PROXY_CONTEXT = BASE_DIR / "docker_challanges" / "ingress_proxy"
+PROXY_IMAGE = "ctf-platform/ingress-proxy:stage2"
+PROXY_PORT = 8080
 
 
 class DockerManagerError(RuntimeError):
@@ -81,11 +84,14 @@ def _docker_client():
 
 
 def _remove_container_and_network(client, instance: models.ChallengeInstance) -> None:
+    """Remove the trusted proxy first, then the lab container and both networks."""
     from docker.errors import NotFound
 
-    if instance.container_id:
+    for container_id in (instance.proxy_container_id, instance.container_id):
+        if not container_id:
+            continue
         try:
-            container = client.containers.get(instance.container_id)
+            container = client.containers.get(container_id)
             try:
                 container.stop(timeout=5)
             except NotFound:
@@ -93,9 +99,12 @@ def _remove_container_and_network(client, instance: models.ChallengeInstance) ->
             container.remove(force=True)
         except NotFound:
             pass
-    if instance.network_id:
+
+    for network_id in (instance.ingress_network_id, instance.network_id):
+        if not network_id:
+            continue
         try:
-            client.networks.get(instance.network_id).remove()
+            client.networks.get(network_id).remove()
         except NotFound:
             pass
 
@@ -154,6 +163,18 @@ def start_or_get_instance(db, user: models.User, challenge: models.Challenge):
                     "Nie udało się zbudować obrazu zadania. Sprawdź Dockerfile i połączenie z Dockerem."
                 ) from exc
 
+        if not PROXY_CONTEXT.is_dir():
+            raise DockerManagerError("Brakuje katalogu z definicją bramy dostępowej Docker.")
+        try:
+            client.images.get(PROXY_IMAGE)
+        except Exception:
+            try:
+                client.images.build(path=str(PROXY_CONTEXT), tag=PROXY_IMAGE, rm=True)
+            except Exception as exc:
+                raise DockerManagerError(
+                    "Nie udało się zbudować obrazu bramy dostępowej. Sprawdź Dockerfile proxy i połączenie z Dockerem."
+                ) from exc
+
         token = uuid.uuid4().hex[:12]
         labels = {
             "ctf.platform": "cb-projekt",
@@ -161,8 +182,12 @@ def start_or_get_instance(db, user: models.User, challenge: models.Challenge):
             "ctf.user_id": str(user.id),
             "ctf.challenge_id": str(challenge.id),
         }
+        # The vulnerable lab container stays on an internal-only network.
+        # Docker does not publish ports for containers attached exclusively to
+        # internal networks, so a small, trusted reverse proxy publishes ingress
+        # from a separate bridge network.
         network = client.networks.create(
-            name=f"ctf-instance-{instance.id}-{token}",
+            name=f"ctf-private-{instance.id}-{token}",
             driver="bridge",
             internal=True,
             labels=labels,
@@ -170,14 +195,22 @@ def start_or_get_instance(db, user: models.User, challenge: models.Challenge):
         instance.network_id = network.id
         db.commit()
 
+        ingress_network = client.networks.create(
+            name=f"ctf-ingress-{instance.id}-{token}",
+            driver="bridge",
+            internal=False,
+            labels={**labels, "ctf.role": "ingress"},
+        )
+        instance.ingress_network_id = ingress_network.id
+        db.commit()
+
         port = int(config["container_port"])
         bind_host = os.getenv("CTF_DOCKER_BIND_HOST", "127.0.0.1").strip()
         container = client.containers.run(
             image_name,
             detach=True,
-            name=f"ctf-{instance.id}-{token}",
+            name=f"ctf-lab-{instance.id}-{token}",
             network=network.name,
-            ports={f"{port}/tcp": (bind_host, None)},
             mem_limit="256m",
             nano_cpus=500_000_000,
             pids_limit=64,
@@ -187,16 +220,49 @@ def start_or_get_instance(db, user: models.User, challenge: models.Challenge):
             tmpfs={"/tmp": "rw,noexec,nosuid,size=32m,mode=1777"},
             user="10001:10001",
             restart_policy={"Name": "no"},
-            labels=labels,
+            labels={**labels, "ctf.role": "challenge"},
         )
         instance.container_id = container.id
         db.commit()
-        container.reload()
+        network.connect(container, aliases=["challenge"])
 
-        bindings = container.attrs.get("NetworkSettings", {}).get("Ports", {})
-        host_bindings = bindings.get(f"{port}/tcp") or []
+        # Create the proxy on the non-internal ingress network so Docker can
+        # publish its host port. Attach it to the private network before start,
+        # allowing its fixed Nginx upstream to resolve the challenge alias.
+        proxy = client.containers.create(
+            PROXY_IMAGE,
+            name=f"ctf-proxy-{instance.id}-{token}",
+            network=ingress_network.name,
+            ports={f"{PROXY_PORT}/tcp": (bind_host,)},
+            mem_limit="64m",
+            nano_cpus=250_000_000,
+            pids_limit=32,
+            cap_drop=["ALL"],
+            security_opt=["no-new-privileges:true"],
+            read_only=True,
+            tmpfs={"/tmp": "rw,noexec,nosuid,size=16m,mode=1777"},
+            user="101:101",
+            restart_policy={"Name": "no"},
+            labels={**labels, "ctf.role": "ingress"},
+        )
+        instance.proxy_container_id = proxy.id
+        db.commit()
+        network.connect(proxy, aliases=["ingress-proxy"])
+        proxy.start()
+        proxy.reload()
+
+        bindings = proxy.attrs.get("NetworkSettings", {}).get("Ports", {})
+        host_bindings = bindings.get(f"{PROXY_PORT}/tcp") or []
         if not host_bindings or not host_bindings[0].get("HostPort"):
-            raise DockerManagerError("Docker nie przydzielił portu dla środowiska.")
+            # The ingress proxy is on a regular bridge network, not an internal one.
+            # Keep details in the server log for diagnosis without exposing them to users.
+            logger.error(
+                "No host port for proxy instance %s: state=%r ports=%r",
+                instance.id,
+                proxy.attrs.get("State"),
+                bindings,
+            )
+            raise DockerManagerError("Docker nie przydzielił portu dla bramy dostępowej środowiska.")
 
         instance.host_port = int(host_bindings[0]["HostPort"])
         instance.status = "running"
@@ -209,10 +275,7 @@ def start_or_get_instance(db, user: models.User, challenge: models.Challenge):
         cleanup_ok = True
         if client:
             try:
-                if container:
-                    container.remove(force=True)
-                if network:
-                    network.remove()
+                _remove_container_and_network(client, instance)
             except Exception:
                 cleanup_ok = False
                 logger.exception("Nie udało się posprzątać nieudanej instancji Docker")
@@ -227,10 +290,7 @@ def start_or_get_instance(db, user: models.User, challenge: models.Challenge):
         cleanup_ok = True
         if client:
             try:
-                if container:
-                    container.remove(force=True)
-                if network:
-                    network.remove()
+                _remove_container_and_network(client, instance)
             except Exception:
                 cleanup_ok = False
                 logger.exception("Nie udało się posprzątać nieudanej instancji Docker")
