@@ -62,16 +62,13 @@ def get_hint_view(
     user: models.User | None,
 ) -> list[dict]:
     """Build a view model that never exposes locked hint text."""
-    hints = (
+    all_hints = (
         db.query(models.ChallengeHint)
-        .filter(
-            models.ChallengeHint.challenge_id == challenge.id,
-            models.ChallengeHint.is_active.is_(True),
-        )
+        .filter(models.ChallengeHint.challenge_id == challenge.id)
         .order_by(models.ChallengeHint.level.asc())
         .all()
     )
-    if not hints:
+    if not all_hints:
         return []
 
     unlocked_by_hint = {}
@@ -80,18 +77,30 @@ def get_hint_view(
             db.query(models.HintUnlock)
             .filter(
                 models.HintUnlock.user_id == user.id,
-                models.HintUnlock.hint_id.in_([hint.id for hint in hints]),
+                models.HintUnlock.hint_id.in_([hint.id for hint in all_hints]),
             )
             .all()
         )
         unlocked_by_hint = {item.hint_id: item for item in unlocks}
+
+    # A user who already paid for a hint keeps its snapshot even if an admin
+    # later deactivates that hint for future players.
+    hints = [
+        hint for hint in all_hints
+        if hint.is_active or hint.id in unlocked_by_hint
+    ]
 
     result = []
     previous_levels_unlocked = True
     for hint in hints:
         unlock = unlocked_by_hint.get(hint.id)
         is_unlocked = unlock is not None
-        can_unlock = bool(user is not None and previous_levels_unlocked and not is_unlocked)
+        can_unlock = bool(
+            hint.is_active
+            and user is not None
+            and previous_levels_unlocked
+            and not is_unlocked
+        )
 
         result.append({
             "id": hint.id,
@@ -104,7 +113,7 @@ def get_hint_view(
             "points_deducted": unlock.points_deducted if unlock else 0,
         })
 
-        if not is_unlocked:
+        if hint.is_active and not is_unlocked:
             previous_levels_unlocked = False
 
     return result
