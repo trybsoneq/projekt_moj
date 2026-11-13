@@ -71,5 +71,23 @@ def migrate() -> None:
     print("Migracja podpowiedzi zakończona.")
 
 
+def migrate_prerequisites() -> None:
+    """Bring older databases through the earlier stages before querying ORM models.
+
+    SQLAlchemy create_all() creates missing tables but does not add columns to
+    existing SQLite tables. In particular, stage 2 adds challenges.docker_template.
+    Running this script directly must therefore apply the earlier idempotent
+    migrations before it loads Challenge objects.
+    """
+    from migrate_roles import migrate as migrate_roles
+    from migrate_docker import migrate as migrate_docker
+    from migrate_activity import migrate as migrate_activity
+
+    migrate_roles()
+    migrate_docker()
+    migrate_activity()
+
+
 if __name__ == "__main__":
+    migrate_prerequisites()
     migrate()
