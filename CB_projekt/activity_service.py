@@ -83,8 +83,8 @@ def record_flag_submission(
 
     # Constant-time comparison makes content-dependent timing less useful.
     is_correct = compare_digest(
-        (submitted_flag or "").strip(),
-        (challenge.flag or ""),
+        (submitted_flag or "").strip().encode("utf-8"),
+        (challenge.flag or "").encode("utf-8"),
     )
 
     submission = models.Submission(
