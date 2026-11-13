@@ -46,3 +46,12 @@ python -m unittest -v test_auth.py
 ```
 
 Użytkownicy zalogowani przed aktualizacją będą musieli zalogować się ponownie, ponieważ nazwa i format ciasteczka sesji uległy zmianie.
+
+
+## Ważne: wspólna ścieżka bazy danych
+
+Aplikacja i migracje używają teraz domyślnie pliku `ctf_platform.db` znajdującego się obok `database.py`. Dzięki temu uruchomienie terminala z innego katalogu nie tworzy przypadkiem drugiej, pustej bazy.
+
+Przy starcie aplikacja automatycznie wykonuje idempotentną migrację ról. W logu powinny pojawić się ścieżka bazy i komunikat `Kolumna users.role: OK`.
+
+Jeżeli bazę celowo przechowujesz w innym miejscu, ustaw zmienną `CTF_DATABASE_PATH` na pełną ścieżkę do istniejącego pliku SQLite przed uruchomieniem aplikacji oraz skryptów migracyjnych. Nie usuwaj ani nie nadpisuj dotychczasowego pliku bazy.
