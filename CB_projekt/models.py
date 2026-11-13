@@ -45,6 +45,10 @@ class Solve(Base):
     challenge_id = Column(Integer, ForeignKey("challenges.id"), nullable=False)
     timestamp = Column(DateTime, default=datetime.datetime.utcnow)
 
+    __table_args__ = (
+        Index("ux_solves_user_challenge", "user_id", "challenge_id", unique=True),
+    )
+
     user = relationship("User", back_populates="solves")
     challenge = relationship("Challenge", back_populates="solves")
 
