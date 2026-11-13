@@ -36,6 +36,14 @@
             <div class="col-12">
                 <input type="text" name="external_url" placeholder="Link do zewnętrznej aplikacji (np. http://127.0.0.1:5000)" style="width:100%; padding:12px; background:#222; color:#fff; border:1px solid #444; border-radius:8px; margin-bottom:15px;">
             </div>
+            <div class="col-12">
+                <label for="docker_template" style="display:block; margin-bottom:6px;">Środowisko Docker (opcjonalnie)</label>
+                <select name="docker_template" id="docker_template" style="width:100%; padding:12px; background:#222; color:#fff; border:1px solid #444; border-radius:8px; margin-bottom:15px;">
+                    <option value="">Brak środowiska Docker</option>
+                    <option value="web_sqli">CyberShop – SQL Injection</option>
+                </select>
+                <small style="color:#aaa;">Dostępne są wyłącznie zweryfikowane szablony znajdujące się w projekcie.</small>
+            </div>
             <div class="col-6 col-12-small">
                 <select name="category" required>
                     <option value="" disabled selected>Wybierz kategorię...</option>
@@ -83,6 +91,8 @@
                         data-category="{{ challenge.category }}"
                         data-points="{{ challenge.points }}"
                         data-flag="{{ challenge.flag }}"
+                        data-external-url="{{ challenge.external_url or '' }}"
+                        data-docker-template="{{ challenge.docker_template or '' }}"
                         style="background: #ffaa00; color: #1a1a1a; border: none; padding: 8px 20px; border-radius: 6px; cursor: pointer;">Edytuj</button>
                     <form method="POST" action="/admin/delete-challenge" style="margin: 0;" onsubmit="return confirm('Usunąć zadanie?');">
                         <input type="hidden" name="challenge_id" value="{{ challenge.id }}">
@@ -109,6 +119,16 @@
                 </div>
                 <div class="col-12">
                     <textarea name="description" id="edit_description" placeholder="Opis zadania" rows="4" required style="width:100%; padding:12px; background:#fff; color:#333; border:1px solid #ddd; border-radius:8px; margin-bottom:15px;"></textarea>
+                </div>
+                <div class="col-12">
+                    <input type="text" name="external_url" id="edit_external_url" placeholder="Link do zewnętrznej aplikacji (opcjonalnie)" style="width:100%; padding:12px; background:#fff; color:#333; border:1px solid #ddd; border-radius:8px; margin-bottom:15px;">
+                </div>
+                <div class="col-12">
+                    <label for="edit_docker_template" style="display:block; margin-bottom:6px; color:#444;">Środowisko Docker</label>
+                    <select name="docker_template" id="edit_docker_template" style="width:100%; height:45px; padding:0 12px; background:#fff; color:#333; border:1px solid #ddd; border-radius:8px; margin-bottom:15px; box-sizing:border-box;">
+                        <option value="">Brak środowiska Docker</option>
+                        <option value="web_sqli">CyberShop – SQL Injection</option>
+                    </select>
                 </div>
                 <div class="col-6 col-12-small">
                     <select name="category" id="edit_category" style="width:100%; height:45px; padding:0 12px; background:#fff; color:#333; border:1px solid #ddd; border-radius:8px; margin-bottom:15px; box-sizing:border-box;">
@@ -143,6 +163,8 @@
             document.getElementById('edit_category').value = this.dataset.category;
             document.getElementById('edit_points').value = this.dataset.points;
             document.getElementById('edit_flag').value = this.dataset.flag;
+            document.getElementById('edit_external_url').value = this.dataset.externalUrl || '';
+            document.getElementById('edit_docker_template').value = this.dataset.dockerTemplate || '';
             document.getElementById('editModal').style.display = 'flex';
         });
     });
