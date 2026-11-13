@@ -42,8 +42,14 @@
                                         <li {% if active_page == 'infrastructure' %}class="current_page_item"{% endif %}>
                                             <a href="/admin/infrastructure" style="color: #66b3ff;">Infrastruktura</a>
                                         </li>
+                                        <li {% if active_page == 'admin_activity' %}class="current_page_item"{% endif %}>
+                                            <a href="/admin/activity" style="color: #66b3ff;">Analiza aktywności</a>
+                                        </li>
                                     {% endif %}
                                     
+                                    <li {% if active_page == 'profile' %}class="current_page_item"{% endif %}>
+                                        <a href="/profile">Mój profil</a>
+                                    </li>
                                     <li><a href="/logout" style="color: #ff6666;">Wyloguj się</a></li>
                                 {% else %}
                                     <li {% if active_page == 'register' %}class="current_page_item"{% endif %}>

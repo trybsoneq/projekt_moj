@@ -66,6 +66,13 @@
             <input type="text" name="flag" id="flagInput" placeholder="Wpisz flage..." style="flex: 1; min-width: 250px; padding: 12px; border: 1px solid #444; border-radius: 8px;">
             <button type="submit" class="button">Sprawdź</button>
         </form>
+        {% if username and challenge_attempts is defined %}
+            <p style="text-align:center; color:#aaa; font-size:.85em; margin-top:1em;">
+                Zapisane próby dla tego zadania: {{ challenge_attempts }}.
+                Limit: {{ max_flag_attempts|default(10) }} prób na minutę na konto.
+                <a href="/profile">Zobacz historię aktywności</a>.
+            </p>
+        {% endif %}
         <div style="text-align: center; margin-top: 10px;">
             {% if message %}
                 <p style="color: {% if solved %}green{% else %}red{% endif %}; font-weight: bold;">

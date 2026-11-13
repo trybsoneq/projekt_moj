@@ -25,6 +25,13 @@ from docker_manager import (
 from instance_routes import router as instance_router
 from infrastructure_routes import router as infrastructure_router
 from migrate_docker import migrate as migrate_docker
+from migrate_activity import migrate as migrate_activity
+from activity_routes import router as activity_router
+from activity_service import (
+    MAX_FLAG_ATTEMPTS_PER_MINUTE,
+    SubmissionRateLimitError,
+    record_flag_submission,
+)
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
@@ -37,6 +44,7 @@ def verify_password(plain_password, hashed_password):
 app = FastAPI()
 app.include_router(instance_router)
 app.include_router(infrastructure_router)
+app.include_router(activity_router)
 logger = logging.getLogger(__name__)
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -103,6 +111,7 @@ def init_database():
 
 migrate_roles()
 migrate_docker()
+migrate_activity()
 init_database()
 
 
@@ -394,7 +403,17 @@ def show_challenge(request: Request, challenge_id: int, current_user: models.Use
     current_instance_url = instance_url(active_instance) if active_instance else None
     instance_error = request.query_params.get("instance_error")
     instance_notice = request.query_params.get("instance_started") or request.query_params.get("instance_stopped")
-    
+    challenge_attempts = 0
+    if current_user:
+        challenge_attempts = (
+            db.query(models.Submission)
+            .filter(
+                models.Submission.user_id == current_user.id,
+                models.Submission.challenge_id == challenge.id,
+            )
+            .count()
+        )
+
     return templates.TemplateResponse(
         request,
         "zerofour/challenge.html",
@@ -408,6 +427,8 @@ def show_challenge(request: Request, challenge_id: int, current_user: models.Use
             "current_instance_url": current_instance_url,
             "instance_error": instance_error,
             "instance_notice": instance_notice,
+            "challenge_attempts": challenge_attempts,
+            "max_flag_attempts": MAX_FLAG_ATTEMPTS_PER_MINUTE,
             "active_page": "home"
         }
     )
@@ -431,112 +452,103 @@ def download_file(challenge_id: int):
     
     raise HTTPException(status_code=404, detail="Plik nie istnieje!")
 
+def _render_challenge_feedback(
+    request: Request,
+    challenge: models.Challenge,
+    current_user: models.User | None,
+    db: Session,
+    message: str,
+    solved: bool,
+):
+    logged_in_user = current_user.username if current_user else None
+    active_instance = get_active_instance(db, current_user.id, challenge.id) if current_user else None
+    current_instance_url = instance_url(active_instance) if active_instance else None
+    challenge_attempts = 0
+    if current_user:
+        challenge_attempts = (
+            db.query(models.Submission)
+            .filter(
+                models.Submission.user_id == current_user.id,
+                models.Submission.challenge_id == challenge.id,
+            )
+            .count()
+        )
+
+    return templates.TemplateResponse(
+        request,
+        "zerofour/challenge.html",
+        {
+            "request": request,
+            "username": logged_in_user,
+            "is_admin": bool(current_user and current_user.role == "admin"),
+            "challenge": challenge,
+            "message": message,
+            "solved": solved,
+            "user_points": get_user_points(db, current_user),
+            "current_instance": active_instance,
+            "current_instance_url": current_instance_url,
+            "instance_error": None,
+            "instance_notice": None,
+            "challenge_attempts": challenge_attempts,
+            "max_flag_attempts": MAX_FLAG_ATTEMPTS_PER_MINUTE,
+            "active_page": "home",
+        },
+    )
+
+
 @app.post("/challenge/{challenge_id}/check")
 def check_flag(
     request: Request,
     challenge_id: int,
     flag: str = Form(...),
     current_user: models.User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
-    challenge = db.query(models.Challenge).filter(models.Challenge.id == challenge_id).first()
-    if not challenge:
+    challenge = (
+        db.query(models.Challenge)
+        .filter(models.Challenge.id == challenge_id)
+        .first()
+    )
+    if challenge is None:
         raise HTTPException(status_code=404, detail="Zadanie nie istnieje!")
-    
-    logged_in_user = current_user.username if current_user else None
-    user_points = get_user_points(db, current_user)
-    
-    if not logged_in_user:
-        return templates.TemplateResponse(
+
+    if current_user is None:
+        return _render_challenge_feedback(
             request,
-            "zerofour/challenge.html",
-            {
-                "request": request,
-                "username": logged_in_user,
-            "is_admin": bool(current_user and current_user.role == "admin"),
-                "challenge": challenge,
-                "message": "Musisz byc zalogowany, aby zdobyc punkty!",
-                "solved": False,
-                "user_points": user_points,
-                "active_page": "home"
-            }
+            challenge,
+            None,
+            db,
+            "Musisz być zalogowany, aby przesyłać flagi i zdobywać punkty.",
+            False,
         )
-    
-    user = current_user
-    if not user:
-        return templates.TemplateResponse(
+
+    try:
+        result = record_flag_submission(db, current_user, challenge, flag)
+    except SubmissionRateLimitError as exc:
+        return _render_challenge_feedback(
             request,
-            "zerofour/challenge.html",
-            {
-                "request": request,
-                "username": logged_in_user,
-            "is_admin": bool(current_user and current_user.role == "admin"),
-                "challenge": challenge,
-                "message": "Nie znaleziono uzytkownika!",
-                "solved": False,
-                "user_points": user_points,
-                "active_page": "home"
-            }
+            challenge,
+            current_user,
+            db,
+            str(exc),
+            False,
         )
-    
-    existing_solve = db.query(models.Solve).filter(
-        models.Solve.user_id == user.id,
-        models.Solve.challenge_id == challenge.id
-    ).first()
-    
-    if existing_solve:
-        return templates.TemplateResponse(
-            request,
-            "zerofour/challenge.html",
-            {
-                "request": request,
-                "username": logged_in_user,
-            "is_admin": bool(current_user and current_user.role == "admin"),
-                "challenge": challenge,
-                "message": "Juz rozwiazales to zadanie!",
-                "solved": True,
-                "user_points": user_points,
-                "active_page": "home"
-            }
-        )
-    
-    if flag.strip() == challenge.flag:
-        user.score += challenge.points
-        new_solve = models.Solve(
-            user_id=user.id,
-            challenge_id=challenge.id
-        )
-        db.add(new_solve)
-        db.commit()
-        
-        user_points = user.score
-        
-        return templates.TemplateResponse(
-            request,
-            "zerofour/challenge.html",
-            {
-                "request": request,
-                "username": logged_in_user,
-            "is_admin": bool(current_user and current_user.role == "admin"),
-                "challenge": challenge,
-                "message": f"Poprawna flaga! +{challenge.points} punktow!",
-                "solved": True,
-                "user_points": user_points,
-                "active_page": "home"
-            }
-        )
+
+    if result["already_solved"]:
+        message = "Już rozwiązałeś to zadanie!"
+        solved = True
+    elif result["is_correct"]:
+        message = f"Poprawna flaga! +{result['points_awarded']} punktów!"
+        solved = True
     else:
-        return templates.TemplateResponse(
-            request,
-            "zerofour/challenge.html",
-            {
-                "request": request,
-                "username": logged_in_user,
-            "is_admin": bool(current_user and current_user.role == "admin"),
-                "challenge": challenge,
-                "message": "Niepoprawna flaga! Sprobuj ponownie.",
-                "solved": False,
-                "user_points": user_points,
-                "active_page": "home"
-            }
-        )
+        message = "Niepoprawna flaga! Próba została zapisana w historii."
+        solved = False
+
+    return _render_challenge_feedback(
+        request,
+        challenge,
+        current_user,
+        db,
+        message,
+        solved,
+    )

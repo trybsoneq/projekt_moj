@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, ForeignKey, DateTime, Text, Index
+from sqlalchemy import Column, Integer, String, ForeignKey, DateTime, Text, Index, Boolean
 from sqlalchemy.orm import relationship
 from database import Base
 import datetime
@@ -15,6 +15,7 @@ class User(Base):
 
     solves = relationship("Solve", back_populates="user")
     instances = relationship("ChallengeInstance", back_populates="user")
+    submissions = relationship("Submission", back_populates="user")
 
 
 class Challenge(Base):
@@ -33,6 +34,7 @@ class Challenge(Base):
 
     solves = relationship("Solve", back_populates="challenge")
     instances = relationship("ChallengeInstance", back_populates="challenge")
+    submissions = relationship("Submission", back_populates="challenge")
 
 
 class Solve(Base):
@@ -43,8 +45,32 @@ class Solve(Base):
     challenge_id = Column(Integer, ForeignKey("challenges.id"), nullable=False)
     timestamp = Column(DateTime, default=datetime.datetime.utcnow)
 
+    __table_args__ = (
+        Index("ux_solves_user_challenge", "user_id", "challenge_id", unique=True),
+    )
+
     user = relationship("User", back_populates="solves")
     challenge = relationship("Challenge", back_populates="solves")
+
+
+
+class Submission(Base):
+    """A flag attempt. The submitted flag text is intentionally never stored."""
+    __tablename__ = "submissions"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    challenge_id = Column(Integer, ForeignKey("challenges.id"), nullable=False, index=True)
+    is_correct = Column(Boolean, nullable=False, default=False, index=True)
+    submitted_at = Column(DateTime, nullable=False, default=datetime.datetime.utcnow, index=True)
+
+    user = relationship("User", back_populates="submissions")
+    challenge = relationship("Challenge", back_populates="submissions")
+
+    __table_args__ = (
+        Index("ix_submissions_user_time", "user_id", "submitted_at"),
+        Index("ix_submissions_challenge_result", "challenge_id", "is_correct"),
+    )
 
 
 class ChallengeInstance(Base):

@@ -24,6 +24,12 @@ class TemplateCompilationTests(unittest.TestCase):
     def test_infrastructure_template_compiles(self):
         self.environment.get_template("zerofour/infrastructure.html")
 
+    def test_profile_template_compiles(self):
+        self.environment.get_template("zerofour/profile.html")
+
+    def test_admin_activity_template_compiles(self):
+        self.environment.get_template("zerofour/admin_activity.html")
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -1,0 +1,126 @@
+{% extends "zerofour/base.html" %}
+
+{% block banner %}
+<div id="banner" style="text-align:center !important;">
+    <h2>Profil użytkownika: {{ username }}</h2>
+    <p style="text-align:center !important;">Twoje postępy, skuteczność i historia rozwiązywania zadań CTF.</p>
+</div>
+{% endblock %}
+
+{% block content %}
+<section class="container box" style="max-width:1100px; margin:0 auto 2em auto; padding:2em;">
+    <div class="row gtr-50" style="margin-bottom:1.5em;">
+        <div class="col-3 col-6-medium col-12-small">
+            <div style="padding:1.25em; border:1px solid #444; border-radius:10px; text-align:center;">
+                <div style="color:#aaa;">Punkty</div>
+                <strong style="font-size:2em;">{{ user_points }}</strong>
+            </div>
+        </div>
+        <div class="col-3 col-6-medium col-12-small">
+            <div style="padding:1.25em; border:1px solid #444; border-radius:10px; text-align:center;">
+                <div style="color:#aaa;">Rozwiązane zadania</div>
+                <strong style="font-size:2em; color:#69d89b;">{{ solved_count }} / {{ total_challenges }}</strong>
+            </div>
+        </div>
+        <div class="col-3 col-6-medium col-12-small">
+            <div style="padding:1.25em; border:1px solid #444; border-radius:10px; text-align:center;">
+                <div style="color:#aaa;">Wszystkie próby</div>
+                <strong style="font-size:2em;">{{ attempts_count }}</strong>
+            </div>
+        </div>
+        <div class="col-3 col-6-medium col-12-small">
+            <div style="padding:1.25em; border:1px solid #444; border-radius:10px; text-align:center;">
+                <div style="color:#aaa;">Skuteczność prób</div>
+                <strong style="font-size:2em;">{{ accuracy }}%</strong>
+            </div>
+        </div>
+    </div>
+
+    <header class="major">
+        <h2>Postęp platformy</h2>
+        <p>Ukończono {{ progress }}% dostępnych zadań.</p>
+    </header>
+    <div style="height:14px; background:#dedede; border-radius:20px; overflow:hidden; margin:1em 0 2em 0;">
+        <div style="height:14px; width:{{ progress }}%; max-width:100%; background:#37b878; border-radius:20px;"></div>
+    </div>
+
+    <div class="row gtr-50" style="margin-bottom:2em;">
+        <div class="col-6 col-12-small">
+            <div style="padding:1em; border:1px solid #444; border-radius:10px;">
+                <h3 style="margin-bottom:.5em;">Poprawne próby</h3>
+                <strong style="font-size:1.8em; color:#36b878;">{{ correct_count }}</strong>
+            </div>
+        </div>
+        <div class="col-6 col-12-small">
+            <div style="padding:1em; border:1px solid #444; border-radius:10px;">
+                <h3 style="margin-bottom:.5em;">Niepoprawne próby</h3>
+                <strong style="font-size:1.8em; color:#e06b6b;">{{ incorrect_count }}</strong>
+            </div>
+        </div>
+    </div>
+
+    <header class="major">
+        <h2>Rozwiązania według kategorii</h2>
+    </header>
+    {% if category_progress %}
+        <div style="overflow-x:auto; margin-bottom:2em;">
+            <table style="width:100%; border-collapse:collapse;">
+                <thead>
+                    <tr style="text-align:left; border-bottom:2px solid #555;">
+                        <th style="padding:.8em;">Kategoria</th>
+                        <th style="padding:.8em;">Rozwiązane zadania</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in category_progress %}
+                    <tr style="border-bottom:1px solid #444;">
+                        <td style="padding:.8em;">{{ item.category }}</td>
+                        <td style="padding:.8em;">{{ item.solved }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    {% else %}
+        <p style="color:#aaa;">Nie masz jeszcze rozwiązanych zadań.</p>
+    {% endif %}
+
+    <header class="major">
+        <h2>Ostatnie próby przesłania flag</h2>
+        <p>Pokazujemy maksymalnie 50 ostatnich prób. Treść wpisywanych flag nie jest przechowywana.</p>
+    </header>
+    {% if recent_submissions %}
+        <div style="overflow-x:auto;">
+            <table style="width:100%; min-width:650px; border-collapse:collapse;">
+                <thead>
+                    <tr style="text-align:left; border-bottom:2px solid #555;">
+                        <th style="padding:.8em;">Data</th>
+                        <th style="padding:.8em;">Zadanie</th>
+                        <th style="padding:.8em;">Wynik</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for submission in recent_submissions %}
+                    <tr style="border-bottom:1px solid #444;">
+                        <td style="padding:.8em; white-space:nowrap;">{{ submission.submitted_at.strftime("%Y-%m-%d %H:%M:%S") }}</td>
+                        <td style="padding:.8em;">{{ submission.challenge.title }}</td>
+                        <td style="padding:.8em;">
+                            {% if submission.is_correct %}
+                                <span style="color:#36b878; font-weight:bold;">Poprawna</span>
+                            {% else %}
+                                <span style="color:#e06b6b; font-weight:bold;">Niepoprawna</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    {% else %}
+        <p style="text-align:center; color:#aaa;">Nie masz jeszcze zapisanych prób. Otwórz zadanie i prześlij pierwszą flagę.</p>
+    {% endif %}
+    <div style="text-align:center; margin-top:2em;">
+        <a href="/" class="button alt">Wróć do zadań</a>
+    </div>
+</section>
+{% endblock %}
