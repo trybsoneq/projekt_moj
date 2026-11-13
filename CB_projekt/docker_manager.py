@@ -67,6 +67,15 @@ def instance_url(instance: models.ChallengeInstance) -> Optional[str]:
     return f"http://{host}:{instance.host_port}"
 
 
+def _is_image_not_found(exc: Exception) -> bool:
+    """Check the Docker SDK's ImageNotFound type without leaking import scope."""
+    try:
+        from docker.errors import ImageNotFound
+    except ImportError:
+        return False
+    return isinstance(exc, ImageNotFound)
+
+
 def _docker_client():
     try:
         import docker
@@ -157,7 +166,9 @@ def start_or_get_instance(db, user: models.User, challenge: models.Challenge):
         logger.info("CTF instance %s: checking challenge image %s", instance.id, image_name)
         try:
             client.images.get(image_name)
-        except ImageNotFound:
+        except Exception as image_error:
+            if not _is_image_not_found(image_error):
+                raise
             logger.info("CTF instance %s: building challenge image", instance.id)
             try:
                 client.images.build(path=str(context), tag=image_name, rm=True)
@@ -172,7 +183,9 @@ def start_or_get_instance(db, user: models.User, challenge: models.Challenge):
         logger.info("CTF instance %s: checking ingress proxy image %s", instance.id, PROXY_IMAGE)
         try:
             client.images.get(PROXY_IMAGE)
-        except ImageNotFound:
+        except Exception as image_error:
+            if not _is_image_not_found(image_error):
+                raise
             logger.info("CTF instance %s: building ingress proxy image", instance.id)
             try:
                 client.images.build(path=str(PROXY_CONTEXT), tag=PROXY_IMAGE, rm=True)
