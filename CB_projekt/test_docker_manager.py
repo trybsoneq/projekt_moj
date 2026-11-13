@@ -16,6 +16,8 @@ from docker_manager import (
     instance_url,
     is_supported_template,
     start_or_get_instance,
+    PROXY_CONTEXT,
+    PROXY_PORT,
 )
 
 
@@ -46,6 +48,10 @@ class DockerManagerTests(unittest.TestCase):
         self.assertTrue(is_supported_template(None))
         self.assertFalse(is_supported_template("host-filesystem-mount"))
         self.assertEqual(set(SUPPORTED_TEMPLATES), {"web_sqli"})
+
+    def test_ingress_proxy_template_is_available(self):
+        self.assertTrue(PROXY_CONTEXT.is_dir())
+        self.assertEqual(PROXY_PORT, 8080)
 
     def test_unknown_template_is_rejected_before_docker_access(self):
         self.challenge.docker_template = "not-allowed"
