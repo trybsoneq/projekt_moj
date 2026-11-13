@@ -92,10 +92,9 @@ def _remove_container_and_network(client, instance: models.ChallengeInstance) ->
             continue
         try:
             container = client.containers.get(container_id)
-            try:
+            container.reload()
+            if container.status == "running":
                 container.stop(timeout=5)
-            except NotFound:
-                pass
             container.remove(force=True)
         except NotFound:
             pass
