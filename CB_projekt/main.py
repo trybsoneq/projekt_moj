@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-from fastapi import FastAPI, Request, Form, Depends, HTTPException, status, Cookie
+from fastapi import FastAPI, Request, Form, Depends, HTTPException, status
 from fastapi.templating import Jinja2Templates
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import RedirectResponse, FileResponse
@@ -10,6 +10,7 @@ from database import engine, Base, get_db, SessionLocal
 import models
 
 from passlib.context import CryptContext
+from security import get_current_user, require_admin, set_session_cookie, clear_session_cookie
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
@@ -41,15 +42,6 @@ templates = Jinja2Templates(directory=TEMPLATES_DIR)
 def init_database():
     db = SessionLocal()
     try:
-        admin = db.query(models.User).filter(models.User.username == "admin").first()
-        if not admin:
-            admin_user = models.User(username="admin", password_hash=get_password_hash("admin"))
-            db.add(admin_user)
-            db.commit()
-            print("Utworzono konto admina (login: admin, haslo: admin)")
-        else:
-            print("Konto admina juz istnieje - pomijam.")
-        
         if db.query(models.Challenge).count() == 0:
             zadania = [
                 models.Challenge(
@@ -100,22 +92,19 @@ def init_database():
 init_database()
 
 
-def get_user_points(db: Session, username: str):
-    if username:
-        user = db.query(models.User).filter(models.User.username == username).first()
-        if user:
-            return user.score
-    return 0
+def get_user_points(db: Session, user):
+    return user.score if user is not None else 0
 
 
 @app.get("/")
 def home(
     request: Request, 
-    logged_in_user: str = Cookie(None), 
+    current_user: models.User = Depends(get_current_user), 
     category: str = None,
     db: Session = Depends(get_db)
 ):
-    user_points = get_user_points(db, logged_in_user)
+    logged_in_user = current_user.username if current_user else None
+    user_points = get_user_points(db, current_user)
     
     # Filtruj zadania jeśli wybrano kategorię
     query = db.query(models.Challenge)
@@ -129,6 +118,7 @@ def home(
         {
             "request": request, 
             "username": logged_in_user,
+            "is_admin": bool(current_user and current_user.role == "admin"),
             "challenges": all_challenges,
             "user_points": user_points,
             "active_page": "home",
@@ -137,8 +127,9 @@ def home(
     )
 
 @app.get("/register")
-def show_register_form(request: Request, logged_in_user: str = Cookie(None), db: Session = Depends(get_db)):
-    user_points = get_user_points(db, logged_in_user)
+def show_register_form(request: Request, current_user: models.User = Depends(get_current_user), db: Session = Depends(get_db)):
+    logged_in_user = current_user.username if current_user else None
+    user_points = get_user_points(db, current_user)
     error = request.query_params.get("error")
     success = request.query_params.get("success")
     return templates.TemplateResponse(
@@ -146,7 +137,8 @@ def show_register_form(request: Request, logged_in_user: str = Cookie(None), db:
         "zerofour/register.html", 
         {
             "request": request, 
-            "username": logged_in_user, 
+            "username": logged_in_user,
+            "is_admin": bool(current_user and current_user.role == "admin"), 
             "user_points": user_points, 
             "error": error, 
             "success": success,
@@ -167,22 +159,24 @@ def register_user(
     if existing_user:
         return RedirectResponse(url="/register?error=Nazwa użytkownika jest już zajęta!", status_code=status.HTTP_302_FOUND)
     
-    new_user = models.User(username=username, password_hash=get_password_hash(password))
+    new_user = models.User(username=username, password_hash=get_password_hash(password), role="user")
     db.add(new_user)
     db.commit()
     
     return RedirectResponse(url="/login?success=Konto utworzone! Możesz się zalogować.", status_code=status.HTTP_302_FOUND)
 
 @app.get("/login")
-def show_login_form(request: Request, logged_in_user: str = Cookie(None), db: Session = Depends(get_db)):
-    user_points = get_user_points(db, logged_in_user)
+def show_login_form(request: Request, current_user: models.User = Depends(get_current_user), db: Session = Depends(get_db)):
+    logged_in_user = current_user.username if current_user else None
+    user_points = get_user_points(db, current_user)
     error = request.query_params.get("error")
     return templates.TemplateResponse(
         request, 
         "zerofour/login.html", 
         {
             "request": request, 
-            "username": logged_in_user, 
+            "username": logged_in_user,
+            "is_admin": bool(current_user and current_user.role == "admin"), 
             "user_points": user_points, 
             "error": error,
             "active_page": "login"
@@ -200,29 +194,29 @@ def login_user(
         return RedirectResponse(url="/login?error=Nieprawidłowy login lub hasło!", status_code=status.HTTP_302_FOUND)
     
     response = RedirectResponse(url="/", status_code=status.HTTP_302_FOUND)
-    response.set_cookie(key="logged_in_user", value=user.username)
+    set_session_cookie(response, user)
     return response
 
 @app.get("/logout")
 def logout():
     response = RedirectResponse(url="/", status_code=status.HTTP_302_FOUND)
-    response.delete_cookie("logged_in_user")
+    clear_session_cookie(response)
     return response
 
 @app.get("/admin")
-def show_admin_panel(request: Request, logged_in_user: str = Cookie(None), db: Session = Depends(get_db)):
-    if not logged_in_user or logged_in_user != "admin":
-        raise HTTPException(status_code=403, detail="Brak dostępu! Tylko dla administratora.")
-    
+def show_admin_panel(request: Request, current_admin: models.User = Depends(require_admin), db: Session = Depends(get_db)):
+    current_user = current_admin
     all_challenges = db.query(models.Challenge).all()
-    user_points = get_user_points(db, logged_in_user)
+    logged_in_user = current_user.username if current_user else None
+    user_points = get_user_points(db, current_user)
     
     return templates.TemplateResponse(
         request, 
         "zerofour/admin.html", 
         {
             "request": request, 
-            "username": logged_in_user, 
+            "username": logged_in_user,
+            "is_admin": bool(current_user and current_user.role == "admin"), 
             "challenges": all_challenges, 
             "user_points": user_points,
             "active_page": "admin"
@@ -239,12 +233,9 @@ def add_challenge(
     points: int = Form(...),
     flag: str = Form(...),
     external_url: str = Form(None),
-    logged_in_user: str = Cookie(None),
+    current_admin: models.User = Depends(require_admin),
     db: Session = Depends(get_db)
 ):
-    if not logged_in_user or logged_in_user != "admin":
-        raise HTTPException(status_code=403, detail="Brak uprawnień!")
-    
     new_challenge = models.Challenge(
         title=title,
         description=description,
@@ -262,12 +253,9 @@ def add_challenge(
 @app.post("/admin/delete-challenge")
 def delete_challenge(
     challenge_id: int = Form(...),
-    logged_in_user: str = Cookie(None),
+    current_admin: models.User = Depends(require_admin),
     db: Session = Depends(get_db)
 ):
-    if not logged_in_user or logged_in_user != "admin":
-        raise HTTPException(status_code=403, detail="Brak uprawnień!")
-    
     challenge = db.query(models.Challenge).filter(models.Challenge.id == challenge_id).first()
     if challenge:
         db.delete(challenge)
@@ -285,12 +273,9 @@ def edit_challenge(
     points: int = Form(...),
     flag: str = Form(...),
     external_url: str = Form(None),
-    logged_in_user: str = Cookie(None),
+    current_admin: models.User = Depends(require_admin),
     db: Session = Depends(get_db)
 ):
-    if not logged_in_user or logged_in_user != "admin":
-        raise HTTPException(status_code=403, detail="Brak uprawnień!")
-    
     challenge = db.query(models.Challenge).filter(models.Challenge.id == challenge_id).first()
     if challenge:
         challenge.title = title
@@ -305,9 +290,10 @@ def edit_challenge(
     return RedirectResponse(url="/admin", status_code=status.HTTP_302_FOUND)
 
 @app.get("/scoreboard")
-def show_scoreboard(request: Request, logged_in_user: str = Cookie(None), db: Session = Depends(get_db)):
+def show_scoreboard(request: Request, current_user: models.User = Depends(get_current_user), db: Session = Depends(get_db)):
     users = db.query(models.User).order_by(models.User.score.desc()).all()
-    user_points = get_user_points(db, logged_in_user)
+    logged_in_user = current_user.username if current_user else None
+    user_points = get_user_points(db, current_user)
     
     return templates.TemplateResponse(
         request,
@@ -315,6 +301,7 @@ def show_scoreboard(request: Request, logged_in_user: str = Cookie(None), db: Se
         {
             "request": request,
             "username": logged_in_user,
+            "is_admin": bool(current_user and current_user.role == "admin"),
             "users": users,
             "user_points": user_points,
             "active_page": "scoreboard"
@@ -322,26 +309,29 @@ def show_scoreboard(request: Request, logged_in_user: str = Cookie(None), db: Se
     )
 
 @app.get("/rules")
-def show_rules(request: Request, logged_in_user: str = Cookie(None), db: Session = Depends(get_db)):
-    user_points = get_user_points(db, logged_in_user)
+def show_rules(request: Request, current_user: models.User = Depends(get_current_user), db: Session = Depends(get_db)):
+    logged_in_user = current_user.username if current_user else None
+    user_points = get_user_points(db, current_user)
     return templates.TemplateResponse(
         request, 
         "zerofour/rules.html", 
         {
             "request": request, 
-            "username": logged_in_user, 
+            "username": logged_in_user,
+            "is_admin": bool(current_user and current_user.role == "admin"), 
             "user_points": user_points,
             "active_page": "rules"
         }
     )
 
 @app.get("/challenge/{challenge_id}")
-def show_challenge(request: Request, challenge_id: int, logged_in_user: str = Cookie(None), db: Session = Depends(get_db)):
+def show_challenge(request: Request, challenge_id: int, current_user: models.User = Depends(get_current_user), db: Session = Depends(get_db)):
     challenge = db.query(models.Challenge).filter(models.Challenge.id == challenge_id).first()
     if not challenge:
         raise HTTPException(status_code=404, detail="Zadanie nie istnieje!")
     
-    user_points = get_user_points(db, logged_in_user)
+    logged_in_user = current_user.username if current_user else None
+    user_points = get_user_points(db, current_user)
     
     return templates.TemplateResponse(
         request,
@@ -349,6 +339,7 @@ def show_challenge(request: Request, challenge_id: int, logged_in_user: str = Co
         {
             "request": request,
             "username": logged_in_user,
+            "is_admin": bool(current_user and current_user.role == "admin"),
             "challenge": challenge,
             "user_points": user_points,
             "active_page": "home"
@@ -379,14 +370,15 @@ def check_flag(
     request: Request,
     challenge_id: int,
     flag: str = Form(...),
-    logged_in_user: str = Cookie(None),
+    current_user: models.User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     challenge = db.query(models.Challenge).filter(models.Challenge.id == challenge_id).first()
     if not challenge:
         raise HTTPException(status_code=404, detail="Zadanie nie istnieje!")
     
-    user_points = get_user_points(db, logged_in_user)
+    logged_in_user = current_user.username if current_user else None
+    user_points = get_user_points(db, current_user)
     
     if not logged_in_user:
         return templates.TemplateResponse(
@@ -395,6 +387,7 @@ def check_flag(
             {
                 "request": request,
                 "username": logged_in_user,
+            "is_admin": bool(current_user and current_user.role == "admin"),
                 "challenge": challenge,
                 "message": "Musisz byc zalogowany, aby zdobyc punkty!",
                 "solved": False,
@@ -403,7 +396,7 @@ def check_flag(
             }
         )
     
-    user = db.query(models.User).filter(models.User.username == logged_in_user).first()
+    user = current_user
     if not user:
         return templates.TemplateResponse(
             request,
@@ -411,6 +404,7 @@ def check_flag(
             {
                 "request": request,
                 "username": logged_in_user,
+            "is_admin": bool(current_user and current_user.role == "admin"),
                 "challenge": challenge,
                 "message": "Nie znaleziono uzytkownika!",
                 "solved": False,
@@ -431,6 +425,7 @@ def check_flag(
             {
                 "request": request,
                 "username": logged_in_user,
+            "is_admin": bool(current_user and current_user.role == "admin"),
                 "challenge": challenge,
                 "message": "Juz rozwiazales to zadanie!",
                 "solved": True,
@@ -456,6 +451,7 @@ def check_flag(
             {
                 "request": request,
                 "username": logged_in_user,
+            "is_admin": bool(current_user and current_user.role == "admin"),
                 "challenge": challenge,
                 "message": f"Poprawna flaga! +{challenge.points} punktow!",
                 "solved": True,
@@ -470,6 +466,7 @@ def check_flag(
             {
                 "request": request,
                 "username": logged_in_user,
+            "is_admin": bool(current_user and current_user.role == "admin"),
                 "challenge": challenge,
                 "message": "Niepoprawna flaga! Sprobuj ponownie.",
                 "solved": False,
