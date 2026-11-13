@@ -27,6 +27,7 @@ from infrastructure_routes import router as infrastructure_router
 from migrate_docker import migrate as migrate_docker
 from migrate_activity import migrate as migrate_activity
 from migrate_hints import migrate as migrate_hints
+from migrate_achievements import migrate as migrate_achievements
 from hint_routes import router as hint_router
 from hint_service import HintError, get_hint_view, save_challenge_hints
 from activity_routes import router as activity_router
@@ -118,6 +119,7 @@ migrate_docker()
 migrate_activity()
 init_database()
 migrate_hints()
+migrate_achievements()
 
 
 async def _instance_cleanup_worker():
@@ -592,7 +594,17 @@ def check_flag(
         message = "Już rozwiązałeś to zadanie!"
         solved = True
     elif result["is_correct"]:
-        message = f"Poprawna flaga! +{result['points_awarded']} punktów!"
+        xp_gained = result.get("base_xp_awarded", 0) + result.get("bonus_xp_awarded", 0)
+        message = (
+            f"Poprawna flaga! +{result['points_awarded']} punktów, "
+            f"+{xp_gained} XP. Osiągnięto poziom {result.get('level', 1)}."
+        )
+        awarded = result.get("achievements_awarded", [])
+        if awarded:
+            names = ", ".join(f"{item['icon']} {item['name']}" for item in awarded)
+            message += f" Nowe osiągnięcia: {names}."
+        if result.get("current_streak", 0):
+            message += f" Seria rozwiązań: {result['current_streak']} dni."
         solved = True
     else:
         message = "Niepoprawna flaga! Próba została zapisana w historii."

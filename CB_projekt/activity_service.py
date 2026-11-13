@@ -10,6 +10,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 import models
+from achievement_service import process_successful_solve
 
 FLAG_ATTEMPT_WINDOW_SECONDS = 60
 MAX_FLAG_ATTEMPTS_PER_MINUTE = max(
@@ -96,6 +97,13 @@ def record_flag_submission(
     db.add(submission)
 
     points_awarded = 0
+    gamification_result = {
+        "base_xp_awarded": 0,
+        "bonus_xp_awarded": 0,
+        "achievements_awarded": [],
+        "current_streak": user.current_streak or 0,
+        "level": (user.xp or 0) // 100 + 1,
+    }
     if is_correct:
         user.score = (user.score or 0) + challenge.points
         points_awarded = challenge.points
@@ -106,6 +114,7 @@ def record_flag_submission(
                 timestamp=now,
             )
         )
+        gamification_result = process_successful_solve(db, user, challenge, now)
 
     try:
         db.commit()
@@ -139,4 +148,5 @@ def record_flag_submission(
         "is_correct": is_correct,
         "points_awarded": points_awarded,
         "submission": submission,
+        **gamification_result,
     }
