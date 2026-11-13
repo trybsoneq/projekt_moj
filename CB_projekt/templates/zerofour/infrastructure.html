@@ -7,10 +7,15 @@
         Stan kontenerów, wykorzystanie zasobów i zarządzanie środowiskami CTF.
     </p>
 </div>
+<script>
+    window.setTimeout(function () {
+        window.location.reload();
+    }, 20000);
+</script>
 {% endblock %}
 
 {% block content %}
-<meta http-equiv="refresh" content="20">
+
 <section class="container box" style="max-width: 1200px; margin: 0 auto 2em auto; padding: 2em;">
     <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:1em; margin-bottom:1.5em;">
         <div>
@@ -123,12 +128,16 @@
                                 <br><small>{{ item.lab.memory.percent }}%</small>
                             {% endif %}
                         </td>
-                        <td style="padding:.9em;">
+                        <td style="padding:.9em; min-width:150px;">
                             {% if item.proxy.status == "running" %}
                                 <span style="color:#69d89b;">running</span>
                             {% else %}
                                 <span style="color:#ffc36b;">{{ item.proxy.status }}</span>
                             {% endif %}
+                            <br><small style="color:#aaa;">CPU:
+                                {{ "%.1f"|format(item.proxy.cpu_percent) ~ " %" if item.proxy.cpu_percent is not none else "—" }}
+                            </small>
+                            <br><small style="color:#aaa;">RAM: {{ format_bytes(item.proxy.memory.usage_bytes) }}</small>
                         </td>
                         <td style="padding:.9em; min-width:145px;">
                             {% if item.can_manage and item.db_status not in ["stopped", "expired", "error"] %}
