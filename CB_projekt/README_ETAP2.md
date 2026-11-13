@@ -76,3 +76,24 @@ Zadanie SQL Injection jest celowo podatne i powinno być udostępniane wyłączn
 Aplikacja oraz skrypty migracyjne korzystają z tej samej, bezwzględnej ścieżki `CTF_DATABASE_PATH` (domyślnie: plik `ctf_platform.db` obok `database.py`). Przy imporcie aplikacji automatycznie i idempotentnie uruchamiane są migracje ról oraz instancji Docker. Możesz nadal uruchamiać `python migrate_roles.py` i `python migrate_docker.py` ręcznie.
 
 Po uruchomieniu serwera sprawdź w terminalu komunikat `Używana baza SQLite: ...` i `Kolumna users.role: OK`. Jeżeli masz istniejącą bazę poza katalogiem projektu, przed uruchomieniem ustaw `CTF_DATABASE_PATH` na jej pełną ścieżkę. Nie kasuj starego pliku bazy.
+
+
+## Diagnostyka uruchamiania środowiska
+
+Pierwsze uruchomienie może potrwać dłużej, ponieważ Docker pobiera obrazy bazowe i buduje dwa obrazy. Klient Docker ma timeout 180 sekund. W terminalu Uvicorn pojawiają się logi kolejnych etapów:
+- `checking/building challenge image`
+- `checking/building ingress proxy image`
+- `private challenge container is running`
+- `starting ingress proxy`
+- `proxy published at ...`
+
+Jeżeli przeglądarka nadal czeka, sprawdź terminal Uvicorn. Nie klikaj przycisku wielokrotnie. W drugim terminalu sprawdź:
+```powershell
+docker ps -a --filter "name=ctf-"
+docker network ls --filter "name=ctf-"
+```
+Logi kontenera proxy:
+```powershell
+$proxy = docker ps -aq --filter "name=ctf-proxy-" | Select-Object -First 1
+if ($proxy) { docker logs $proxy }
+```
