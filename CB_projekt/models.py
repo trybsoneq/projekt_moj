@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, ForeignKey, DateTime, Text, Index, Boolean
+from sqlalchemy import Column, Integer, String, ForeignKey, DateTime, Text, Index, Boolean, CheckConstraint, UniqueConstraint
 from sqlalchemy.orm import relationship
 from database import Base
 import datetime
@@ -16,6 +16,7 @@ class User(Base):
     solves = relationship("Solve", back_populates="user")
     instances = relationship("ChallengeInstance", back_populates="user")
     submissions = relationship("Submission", back_populates="user")
+    hint_unlocks = relationship("HintUnlock", back_populates="user")
 
 
 class Challenge(Base):
@@ -35,6 +36,7 @@ class Challenge(Base):
     solves = relationship("Solve", back_populates="challenge")
     instances = relationship("ChallengeInstance", back_populates="challenge")
     submissions = relationship("Submission", back_populates="challenge")
+    hints = relationship("ChallengeHint", back_populates="challenge", order_by="ChallengeHint.level")
 
 
 class Solve(Base):
@@ -70,6 +72,47 @@ class Submission(Base):
     __table_args__ = (
         Index("ix_submissions_user_time", "user_id", "submitted_at"),
         Index("ix_submissions_challenge_result", "challenge_id", "is_correct"),
+    )
+
+
+class ChallengeHint(Base):
+    """One of up to three ordered hints for a challenge."""
+    __tablename__ = "challenge_hints"
+
+    id = Column(Integer, primary_key=True, index=True)
+    challenge_id = Column(Integer, ForeignKey("challenges.id", ondelete="CASCADE"), nullable=False, index=True)
+    level = Column(Integer, nullable=False)
+    content = Column(Text, nullable=False)
+    penalty_points = Column(Integer, nullable=False, default=0)
+    is_active = Column(Boolean, nullable=False, default=True)
+
+    challenge = relationship("Challenge", back_populates="hints")
+    unlocks = relationship("HintUnlock", back_populates="hint")
+
+    __table_args__ = (
+        UniqueConstraint("challenge_id", "level", name="uq_challenge_hint_level"),
+        CheckConstraint("level >= 1 AND level <= 3", name="ck_challenge_hint_level"),
+        CheckConstraint("penalty_points >= 0", name="ck_challenge_hint_penalty"),
+    )
+
+
+class HintUnlock(Base):
+    """A user unlocking a hint. Snapshot preserves the text they paid for."""
+    __tablename__ = "hint_unlocks"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    hint_id = Column(Integer, ForeignKey("challenge_hints.id", ondelete="CASCADE"), nullable=False, index=True)
+    unlocked_at = Column(DateTime, nullable=False, default=datetime.datetime.utcnow)
+    points_deducted = Column(Integer, nullable=False, default=0)
+    hint_content_snapshot = Column(Text, nullable=False)
+
+    user = relationship("User", back_populates="hint_unlocks")
+    hint = relationship("ChallengeHint", back_populates="unlocks")
+
+    __table_args__ = (
+        UniqueConstraint("user_id", "hint_id", name="uq_user_hint_unlock"),
+        CheckConstraint("points_deducted >= 0", name="ck_hint_unlock_penalty"),
     )
 
 
