@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 import models
 from database import get_db
 from security import require_admin, require_user
+from achievement_service import level_from_xp
 
 router = APIRouter()
 
@@ -62,6 +63,45 @@ def show_user_profile(
         for category, count in category_rows
     ]
 
+    level_info = level_from_xp(current_user.xp)
+    earned_rows = (
+        db.query(models.UserAchievement)
+        .join(models.Achievement)
+        .filter(models.UserAchievement.user_id == current_user.id)
+        .order_by(models.UserAchievement.awarded_at.desc())
+        .all()
+    )
+    earned_achievements = [
+        {
+            "name": row.achievement.name,
+            "description": row.achievement.description,
+            "icon": row.achievement.icon,
+            "category": row.achievement.category,
+            "xp_awarded": row.xp_awarded,
+            "awarded_at": row.awarded_at,
+            "challenge_title": row.challenge.title if row.challenge else None,
+        }
+        for row in earned_rows
+    ]
+    earned_codes = {row.achievement.code for row in earned_rows}
+    available_achievements = (
+        db.query(models.Achievement)
+        .filter(models.Achievement.is_active.is_(True))
+        .order_by(models.Achievement.category.asc(), models.Achievement.name.asc())
+        .all()
+    )
+    locked_achievements = [
+        {
+            "name": badge.name,
+            "description": badge.description,
+            "icon": badge.icon,
+            "category": badge.category,
+            "xp_reward": badge.xp_reward,
+        }
+        for badge in available_achievements
+        if badge.code not in earned_codes
+    ]
+
     return request.app.state.templates.TemplateResponse(
         request,
         "zerofour/profile.html",
@@ -80,6 +120,13 @@ def show_user_profile(
             "progress": progress,
             "recent_submissions": recent_submissions,
             "category_progress": category_progress,
+            "xp": current_user.xp or 0,
+            "level_info": level_info,
+            "current_streak": current_user.current_streak or 0,
+            "longest_streak": current_user.longest_streak or 0,
+            "last_solve_date": current_user.last_solve_date,
+            "earned_achievements": earned_achievements,
+            "locked_achievements": locked_achievements,
         },
     )
 
