@@ -3,24 +3,39 @@
 ## Funkcje
 
 - Każdy użytkownik może uruchomić własną instancję zadania „Podatna wyszukiwarka” (SQL Injection).
-- Każda instancja ma osobny kontener, wewnętrzną sieć Docker i losowo przydzielony port hosta.
+- Każde laboratorium ma własny kontener i dedykowaną sieć Docker typu `internal`.
+- Dostęp z przeglądarki zapewnia osobny, zaufany kontener Nginx (ingress proxy). Port hosta jest publikowany przez proxy w osobnej sieci bridge.
+- Kontener z celowo podatną aplikacją pozostaje wyłącznie w sieci wewnętrznej i nie ma domyślnej trasy do Internetu.
+- Proxy ma stały upstream `http://challenge:7000`; użytkownik nie może zmienić adresu docelowego.
 - Jedna instancja danego zadania na użytkownika; maksymalnie dwa aktywne środowiska na użytkownika.
 - Instancja wygasa po 30 minutach. Worker FastAPI sprawdza wygasające instancje co 30 sekund.
 - Użytkownik może zatrzymać własny kontener wcześniej; administrator może zatrzymać dowolną instancję.
-- Limity kontenera: 256 MB RAM, 0,5 CPU, 64 procesy, brak dodatkowych capabilities, `no-new-privileges`, read-only filesystem oraz tmpfs dla pliku bazy zadania.
-- Dozwolone są wyłącznie szablony z allowlisty `SUPPORTED_TEMPLATES`. Dane z formularza nie mogą wybrać obrazu, polecenia ani montowania woluminu.
+- Limity laboratorium: 256 MB RAM, 0,5 CPU i 64 procesy. Limity proxy: 64 MB RAM, 0,25 CPU i 32 procesy.
+- Oba kontenery działają bez dodatkowych capabilities, z `no-new-privileges` i read-only root filesystem.
+- Dozwolone są wyłącznie szablony z allowlisty `SUPPORTED_TEMPLATES`. Dane z formularza nie mogą wybrać obrazu, polecenia, montowania woluminu ani celu proxy.
+
+## Dlaczego proxy jest osobnym kontenerem?
+
+Docker Engine nie publikuje portów kontenera, który jest podłączony wyłącznie do sieci `internal` bez bramy domyślnej. Samo laboratorium nie może więc jednocześnie pozostać wyłącznie w sieci wewnętrznej i otrzymać mapowania portu hosta.
+
+Rozwiązanie rozdziela role:
+- podatne laboratorium jest podłączone tylko do prywatnej sieci `internal`;
+- zaufany Nginx jest podłączony do sieci ingress (bridge) oraz prywatnej sieci laboratorium;
+- host publikuje port Nginx, który przekazuje żądania wyłącznie do stałej nazwy `challenge` w prywatnej sieci.
+
+W konsekwencji kontener z zadaniem nie otrzymuje zewnętrznej karty sieciowej. Kontener proxy ma połączenie z siecią bridge, dlatego musi pozostać zaufanym, niezmiennym elementem infrastruktury — nie uruchamiamy w nim kodu ani konfiguracji pochodzącej od użytkowników.
 
 ## Instalacja / aktualizacja
 
 W katalogu `CB_projekt`:
 
 ```powershell
-pip install -r requirements.txt
+python -m pip install -r requirements.txt
 python migrate_roles.py
 python migrate_docker.py
 ```
 
-Migracje są idempotentne i zachowują dotychczasowych użytkowników, zadania, wyniki oraz punktację. Zadanie „Podatna wyszukiwarka” zostanie powiązane z szablonem `web_sqli`, a stary adres localhost zostanie wyczyszczony.
+Migracje są idempotentne i zachowują dotychczasowych użytkowników, zadania, wyniki oraz punktację. Migracja Docker dodaje również pola identyfikujące kontener proxy i sieć ingress. Zadanie „Podatna wyszukiwarka” zostanie powiązane z szablonem `web_sqli`.
 
 Jeśli konto administratora nie zostało jeszcze skonfigurowane po etapie 1, wykonaj `python create_admin.py`.
 
@@ -32,16 +47,16 @@ Uruchom Docker Desktop i poczekaj na gotowość silnika. Ustaw sekret sesji i ad
 $env:CTF_SECRET_KEY = (python -c "import secrets; print(secrets.token_urlsafe(48))")
 $env:CTF_DOCKER_BIND_HOST = "127.0.0.1"
 $env:CTF_PUBLIC_HOST = "127.0.0.1"
-uvicorn main:app --reload
+python -m uvicorn main:app --reload
 ```
 
-Otwórz zadanie „Podatna wyszukiwarka” i kliknij „Uruchom środowisko (30 min)”. Pierwsze uruchomienie zbuduje obraz z lokalnego Dockerfile.
+Otwórz zadanie „Podatna wyszukiwarka” i kliknij „Uruchom środowisko (30 min)”. Przy pierwszym uruchomieniu Docker zbuduje obraz laboratorium i obraz proxy Nginx.
 
 ## Serwer zdalny
 
 Ustaw `CTF_PUBLIC_HOST` na nazwę DNS lub publiczny adres hosta i `CTF_DOCKER_BIND_HOST=0.0.0.0`. Ogranicz dostęp do publikowanych portów na firewallu. Nie wystawiaj Docker API ani socketu Dockera do przeglądarki ani kontenerów zadań.
 
-Na tym etapie adresy instancji działają przez HTTP na losowych portach. Do publicznego wdrożenia zalecany jest reverse proxy z HTTPS i odpowiednimi regułami sieciowymi.
+Na tym etapie adresy instancji działają przez HTTP na losowych portach. Do publicznego wdrożenia zalecany jest centralny reverse proxy z HTTPS i odpowiednimi regułami sieciowymi.
 
 ## Testy
 
@@ -49,8 +64,8 @@ Na tym etapie adresy instancji działają przez HTTP na losowych portach. Do pub
 python -m unittest -v test_auth.py test_docker_manager.py
 ```
 
-Testy jednostkowe nie wymagają demona Docker. Rzeczywiste uruchomienie kontenera wymaga działającego Docker Desktop lub usługi Docker.
+Testy jednostkowe nie wymagają demona Docker. Rzeczywiste budowanie obrazów i uruchomienie kontenerów wymaga działającego Docker Desktop lub usługi Docker.
 
 ## Uwaga bezpieczeństwa
 
-Zadanie SQL Injection jest celowo podatne i powinno być udostępniane wyłącznie w odizolowanym laboratorium. Kontenery nie montują katalogów hosta ani socketu Dockera, a ich sieć wewnętrzna nie ma routingu wychodzącego do Internetu.
+Zadanie SQL Injection jest celowo podatne i powinno być udostępniane wyłącznie w odizolowanym laboratorium. Kontener laboratorium nie ma montowań hosta, socketu Dockera ani zewnętrznej sieci. Zaufany proxy ma dostęp do ingress i do sieci prywatnej laboratorium, ale obsługuje wyłącznie statyczny upstream.
