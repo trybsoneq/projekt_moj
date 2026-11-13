@@ -9,6 +9,7 @@ import models
 from database import get_db
 from docker_manager import (
     DockerManagerError,
+    format_bytes,
     get_infrastructure_overview,
     restart_instance,
     stop_instance,
@@ -48,6 +49,7 @@ def show_infrastructure_dashboard(
             "active_page": "infrastructure",
             "notice": request.query_params.get("notice"),
             "error": request.query_params.get("error"),
+            "format_bytes": format_bytes,
             **snapshot,
         },
     )
