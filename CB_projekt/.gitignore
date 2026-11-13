@@ -1,0 +1,12 @@
+# Dane lokalne i sekrety
+*.db
+*.sqlite3
+.env
+
+# Środowisko i pliki tymczasowe
+venv/
+env/
+.venv/
+__pycache__/
+*.py[cod]
+.DS_Store
