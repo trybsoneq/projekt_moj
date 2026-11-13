@@ -1,0 +1,75 @@
+/*
+ * CyberSim navigation overrides.
+ * The original ZeroFour theme places the logo and navigation absolutely in
+ * the same 5.5em row. This worked with a few links but caused overlap after
+ * adding profile and administrator destinations. Keep the mobile title bar
+ * behaviour from the original theme; use a wrapping flex menu on desktop.
+ */
+@media screen and (min-width: 981px) {
+    #header .inner {
+        height: auto !important;
+        min-height: 5.5em;
+        display: flex;
+        flex-direction: column;
+        align-items: stretch;
+        gap: 0.75rem;
+        padding: 1.15rem 1.5rem;
+        box-sizing: border-box;
+    }
+
+    #header h1 {
+        position: static;
+        left: auto;
+        top: auto;
+        margin: 0;
+        font-size: 1.35em;
+        line-height: 1.25;
+    }
+
+    #nav {
+        position: static;
+        inset: auto;
+        width: 100%;
+        margin: 0;
+        line-height: 1.4;
+        clear: both;
+    }
+
+    #nav > ul {
+        display: flex !important;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: flex-start;
+        gap: 0.35rem 0.45rem;
+        margin: 0;
+        padding: 0;
+    }
+
+    #nav > ul > li {
+        float: none;
+        flex: 0 0 auto;
+        margin: 0;
+        padding: 0;
+    }
+
+    #nav > ul > li:last-child {
+        padding-right: 0;
+    }
+
+    #nav > ul > li > a,
+    #nav > ul > li > span {
+        display: block;
+        padding: 0.48em 0.7em;
+        font-size: 0.8em;
+        letter-spacing: 0.04em;
+        line-height: 1.5;
+        white-space: nowrap;
+    }
+}
+
+@media screen and (max-width: 980px) {
+    /* Let the original ZeroFour title bar and slide-out navigation take over. */
+    #header .inner {
+        height: 5.5em;
+    }
+}
