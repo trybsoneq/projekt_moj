@@ -16,7 +16,7 @@ class User(Base):
     solves = relationship("Solve", back_populates="user")
     instances = relationship("ChallengeInstance", back_populates="user")
     submissions = relationship("Submission", back_populates="user")
-    hint_unlocks = relationship("HintUnlock", back_populates="user")
+    hint_unlocks = relationship("HintUnlock", back_populates="user", cascade="all, delete-orphan")
 
 
 class Challenge(Base):
@@ -36,7 +36,7 @@ class Challenge(Base):
     solves = relationship("Solve", back_populates="challenge")
     instances = relationship("ChallengeInstance", back_populates="challenge")
     submissions = relationship("Submission", back_populates="challenge")
-    hints = relationship("ChallengeHint", back_populates="challenge", order_by="ChallengeHint.level")
+    hints = relationship("ChallengeHint", back_populates="challenge", order_by="ChallengeHint.level", cascade="all, delete-orphan")
 
 
 class Solve(Base):
@@ -87,7 +87,7 @@ class ChallengeHint(Base):
     is_active = Column(Boolean, nullable=False, default=True)
 
     challenge = relationship("Challenge", back_populates="hints")
-    unlocks = relationship("HintUnlock", back_populates="hint")
+    unlocks = relationship("HintUnlock", back_populates="hint", cascade="all, delete-orphan")
 
     __table_args__ = (
         UniqueConstraint("challenge_id", "level", name="uq_challenge_hint_level"),
