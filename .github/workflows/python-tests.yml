@@ -36,4 +36,4 @@ jobs:
         run: python -m compileall -q .
 
       - name: Run unit tests
-        run: python -m unittest -v test_auth.py test_docker_manager.py test_templates.py
+        run: python -m unittest -v test_auth.py test_docker_manager.py test_activity.py test_templates.py
