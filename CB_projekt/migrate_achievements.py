@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from datetime import date, datetime, timedelta
-from sqlalchemy import inspect, text
+from sqlalchemy import inspect, text, func
 
 from database import engine, DATABASE_PATH, Base, SessionLocal
 import models
@@ -191,8 +191,7 @@ def _backfill_user_progress(db, achievements: dict[str, models.Achievement]) -> 
 
         db.flush()
         badge_xp = (
-            db.query(text("COALESCE(SUM(xp_awarded), 0)"))
-            .select_from(models.UserAchievement.__table__)
+            db.query(func.coalesce(func.sum(models.UserAchievement.xp_awarded), 0))
             .filter(models.UserAchievement.user_id == user.id)
             .scalar()
             or 0
