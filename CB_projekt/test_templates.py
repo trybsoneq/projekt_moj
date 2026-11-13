@@ -30,6 +30,15 @@ class TemplateCompilationTests(unittest.TestCase):
     def test_admin_activity_template_compiles(self):
         self.environment.get_template("zerofour/admin_activity.html")
 
+    def test_scoreboard_template_compiles(self):
+        self.environment.get_template("zerofour/scoreboard.html")
+
+    def test_profile_template_contains_gamification_sections(self):
+        source = (TEMPLATE_DIR / "zerofour" / "profile.html").read_text(encoding="utf-8")
+        self.assertIn("Odznaki i osiągnięcia", source)
+        self.assertIn("Poziom doświadczenia", source)
+        self.assertIn("Aktualna seria", source)
+
     def test_challenge_template_compiles(self):
         self.environment.get_template("zerofour/challenge.html")
 
