@@ -1,24 +1,33 @@
-# database.py
+"""Database configuration shared by migrations and the web application."""
+import os
+from pathlib import Path
+
 from sqlalchemy import create_engine
-from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy.engine import URL
+from sqlalchemy.orm import declarative_base, sessionmaker
 
-# Nazwa pliku naszej bazy danych SQLite
-SQLALCHEMY_DATABASE_URL = "sqlite:///./ctf_platform.db"
+BASE_DIR = Path(__file__).resolve().parent
+DEFAULT_DATABASE_PATH = BASE_DIR / "ctf_platform.db"
+DATABASE_PATH = Path(
+    os.getenv("CTF_DATABASE_PATH", str(DEFAULT_DATABASE_PATH))
+).expanduser().resolve()
 
-# Engine to serce połączenia z bazą. 
-# check_same_thread=False jest potrzebne tylko dla SQLite w FastAPI
-engine = create_engine(
-    SQLALCHEMY_DATABASE_URL, connect_args={"check_same_thread": False}
+# An absolute SQLite path ensures CLI migrations and Uvicorn use the same file,
+# even when the process is started from a different working directory.
+SQLALCHEMY_DATABASE_URL = URL.create(
+    "sqlite",
+    database=str(DATABASE_PATH),
 )
 
-# Sesja pozwala nam wykonywać operacje na bazie (dodawanie, usuwanie itp.)
-SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+engine = create_engine(
+    SQLALCHEMY_DATABASE_URL,
+    connect_args={"check_same_thread": False},
+)
 
-# Z tej klasy będą dziedziczyć nasze modele/tabele
+SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
 
-# Funkcja pomocnicza, którą wykorzystamy później w API do bezpiecznego otwierania/zamykania sesji
+
 def get_db():
     db = SessionLocal()
     try:
