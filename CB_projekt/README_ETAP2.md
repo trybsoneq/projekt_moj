@@ -102,3 +102,6 @@ if ($proxy) { docker logs $proxy }
 ### Nginx na read-only filesystem
 
 Konfiguracja ingress proxy kieruje wszystkie katalogi tymczasowe Nginx (`client_body`, `proxy`, `fastcgi`, `uwsgi`, `scgi`) do katalogów pod `/tmp`. Kontener proxy ma zapisywalny `tmpfs` pod `/tmp`, natomiast jego główny system plików pozostaje tylko do odczytu. Dzięki temu Nginx nie próbuje tworzyć katalogów w `/var/cache/nginx`.
+
+
+Po zmianie konfiguracji Nginx używany jest nowy tag obrazu proxy `ctf-platform/ingress-proxy:stage2-fix1`. Wymusza to zbudowanie świeżego obrazu z poprawionym plikiem `nginx.conf`; nie trzeba ręcznie usuwać starego obrazu.
