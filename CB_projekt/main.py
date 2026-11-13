@@ -116,8 +116,8 @@ def init_database():
 migrate_roles()
 migrate_docker()
 migrate_activity()
-migrate_hints()
 init_database()
+migrate_hints()
 
 
 async def _instance_cleanup_worker():
