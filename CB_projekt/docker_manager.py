@@ -421,3 +421,235 @@ def cleanup_expired_instances() -> int:
     finally:
         db.close()
     return stopped
+
+
+def calculate_cpu_percent(stats: dict) -> Optional[float]:
+    """Calculate a container CPU percentage from a one-shot Docker stats payload."""
+    cpu = stats.get("cpu_stats") or {}
+    previous = stats.get("precpu_stats") or {}
+    cpu_usage = cpu.get("cpu_usage") or {}
+    previous_usage = previous.get("cpu_usage") or {}
+
+    current_total = cpu_usage.get("total_usage")
+    previous_total = previous_usage.get("total_usage")
+    current_system = cpu.get("system_cpu_usage")
+    previous_system = previous.get("system_cpu_usage")
+    if None in (current_total, previous_total, current_system, previous_system):
+        return None
+
+    cpu_delta = current_total - previous_total
+    system_delta = current_system - previous_system
+    if cpu_delta < 0 or system_delta <= 0:
+        return None
+
+    online_cpus = cpu.get("online_cpus")
+    if not online_cpus:
+        online_cpus = len(cpu_usage.get("percpu_usage") or []) or 1
+    return round((cpu_delta / system_delta) * online_cpus * 100.0, 1)
+
+
+def calculate_memory_usage(stats: dict) -> dict:
+    """Return memory usage, limit and percentage from a Docker stats payload."""
+    memory_stats = stats.get("memory_stats") or {}
+    usage = memory_stats.get("usage")
+    limit = memory_stats.get("limit")
+    memory_details = memory_stats.get("stats") or {}
+    cache = memory_details.get("total_inactive_file")
+    if cache is None:
+        cache = memory_details.get("inactive_file", 0)
+    if usage is not None:
+        usage = max(0, usage - (cache or 0))
+    percentage = None
+    if usage is not None and limit:
+        percentage = round((usage / limit) * 100.0, 1)
+    return {"usage_bytes": usage, "limit_bytes": limit, "percent": percentage}
+
+
+def format_bytes(value: Optional[int]) -> str:
+    if value is None:
+        return "—"
+    units = ("B", "KB", "MB", "GB", "TB")
+    amount = float(value)
+    for unit in units:
+        if amount < 1024 or unit == units[-1]:
+            return f"{amount:.1f} {unit}" if unit != "B" else f"{int(amount)} B"
+        amount /= 1024
+    return f"{amount:.1f} TB"
+
+
+def _read_container_metrics(client, container_id: Optional[str]) -> dict:
+    """Inspect a known container and read live resource metrics."""
+    if not container_id:
+        return {
+            "status": "brak",
+            "cpu_percent": None,
+            "memory": {"usage_bytes": None, "limit_bytes": None, "percent": None},
+            "error": None,
+        }
+
+    try:
+        container = client.containers.get(container_id)
+        container.reload()
+        state = container.status
+        cpu_percent = None
+        memory = {"usage_bytes": None, "limit_bytes": None, "percent": None}
+
+        if state == "running":
+            try:
+                payload = container.stats(stream=False)
+                cpu_percent = calculate_cpu_percent(payload)
+                memory = calculate_memory_usage(payload)
+            except Exception:
+                logger.exception("Could not read Docker stats for container %s", container_id)
+
+        return {"status": state, "cpu_percent": cpu_percent, "memory": memory, "error": None}
+    except Exception as exc:
+        try:
+            from docker.errors import NotFound
+            if isinstance(exc, NotFound):
+                return {
+                    "status": "brak",
+                    "cpu_percent": None,
+                    "memory": {"usage_bytes": None, "limit_bytes": None, "percent": None},
+                    "error": "Kontener nie istnieje w Docker Engine.",
+                }
+        except ImportError:
+            pass
+        logger.exception("Could not inspect Docker container %s", container_id)
+        return {
+            "status": "niedostępny",
+            "cpu_percent": None,
+            "memory": {"usage_bytes": None, "limit_bytes": None, "percent": None},
+            "error": "Nie udało się pobrać stanu kontenera.",
+        }
+
+
+def get_infrastructure_overview(db, limit: int = 100) -> dict:
+    """Return recent instance records enriched with live Docker container metrics."""
+    instances = (
+        db.query(models.ChallengeInstance)
+        .order_by(models.ChallengeInstance.created_at.desc())
+        .limit(limit)
+        .all()
+    )
+
+    result = []
+    try:
+        client = _docker_client()
+        docker_available = True
+        docker_error = None
+    except DockerManagerError as exc:
+        client = None
+        docker_available = False
+        docker_error = str(exc)
+
+    try:
+        for instance in instances:
+            unavailable = {
+                "status": "niedostępny",
+                "cpu_percent": None,
+                "memory": {"usage_bytes": None, "limit_bytes": None, "percent": None},
+                "error": docker_error,
+            }
+            lab = _read_container_metrics(client, instance.container_id) if client else dict(unavailable)
+            proxy = _read_container_metrics(client, instance.proxy_container_id) if client else dict(unavailable)
+
+            result.append({
+                "id": instance.id,
+                "username": instance.user.username if instance.user else "—",
+                "challenge_title": instance.challenge.title if instance.challenge else "—",
+                "db_status": instance.status,
+                "created_at": instance.created_at,
+                "expires_at": instance.expires_at,
+                "stopped_at": instance.stopped_at,
+                "host_port": instance.host_port,
+                "lab": lab,
+                "proxy": proxy,
+                "can_manage": bool(instance.container_id and instance.proxy_container_id),
+                "last_error": instance.error_message,
+            })
+    finally:
+        if client:
+            try:
+                client.close()
+            except Exception:
+                pass
+
+    active_statuses = {"starting", "running", "stop_failed"}
+    return {
+        "docker_available": docker_available,
+        "docker_error": docker_error,
+        "instances": result,
+        "total_instances": len(result),
+        "active_instances": sum(1 for item in result if item["db_status"] in active_statuses),
+        "running_labs": sum(1 for item in result if item["lab"]["status"] == "running"),
+        "failed_instances": sum(1 for item in result if item["db_status"] in {"error", "stop_failed"}),
+    }
+
+
+def restart_instance(db, instance: models.ChallengeInstance) -> None:
+    """Restart the existing lab and ingress containers without changing ownership."""
+    if not instance.container_id or not instance.proxy_container_id:
+        raise DockerManagerError(
+            "Ta instancja nie ma już kompletu kontenerów. Uruchom zadanie ponownie z jego strony."
+        )
+    if instance.status in {"stopped", "expired", "error"}:
+        raise DockerManagerError(
+            "Ta instancja jest zatrzymana lub wygasła. Uruchom nowe środowisko ze strony zadania."
+        )
+
+    client = _docker_client()
+    try:
+        try:
+            lab = client.containers.get(instance.container_id)
+            proxy = client.containers.get(instance.proxy_container_id)
+        except Exception as exc:
+            raise DockerManagerError(
+                "Nie znaleziono kontenera laboratorium lub proxy. Uruchom nowe środowisko ze strony zadania."
+            ) from exc
+
+        for container, label in ((lab, "laboratorium"), (proxy, "proxy")):
+            container.reload()
+            if container.status == "running":
+                container.restart(timeout=10)
+            else:
+                container.start()
+            container.reload()
+            if container.status != "running":
+                try:
+                    logs = container.logs(tail=60, stdout=True, stderr=True)
+                    if isinstance(logs, bytes):
+                        logs = logs.decode("utf-8", errors="replace")
+                except Exception:
+                    logs = "Nie udało się odczytać logów kontenera."
+                logger.error(
+                    "Restart failed for %s container of instance %s: %s",
+                    label, instance.id, logs
+                )
+                raise DockerManagerError(
+                    f"Nie udało się ponownie uruchomić kontenera: {label}. Sprawdź terminal serwera."
+                )
+
+        bindings = proxy.attrs.get("NetworkSettings", {}).get("Ports", {})
+        host_bindings = bindings.get(f"{PROXY_PORT}/tcp") or []
+        if not host_bindings or not host_bindings[0].get("HostPort"):
+            raise DockerManagerError("Po restarcie proxy nie ma przypisanego portu hosta.")
+
+        instance.host_port = int(host_bindings[0]["HostPort"])
+        instance.status = "running"
+        instance.error_message = None
+        instance.stopped_at = None
+        db.commit()
+    except DockerManagerError:
+        raise
+    except Exception as exc:
+        logger.exception("Could not restart Docker instance %s", instance.id)
+        instance.status = "error"
+        instance.error_message = "Restart środowiska nie powiódł się. Sprawdź logi serwera."
+        db.commit()
+        raise DockerManagerError(instance.error_message) from exc
+    finally:
+        try:
+            client.close()
+        except Exception:
+            pass

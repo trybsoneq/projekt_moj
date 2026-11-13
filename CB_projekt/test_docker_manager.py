@@ -12,10 +12,14 @@ from database import Base
 from docker_manager import (
     DockerManagerError,
     SUPPORTED_TEMPLATES,
+    calculate_cpu_percent,
+    calculate_memory_usage,
+    format_bytes,
     get_active_instance,
     instance_url,
     is_supported_template,
     start_or_get_instance,
+    restart_instance,
     PROXY_CONTEXT,
     PROXY_PORT,
 )
@@ -88,6 +92,118 @@ class DockerManagerTests(unittest.TestCase):
         instance = models.ChallengeInstance(host_port=49154)
         with patch.dict(os.environ, {"CTF_PUBLIC_HOST": "ctf.example.test"}):
             self.assertEqual(instance_url(instance), "http://ctf.example.test:49154")
+
+
+    def test_restart_restarts_both_containers_and_preserves_instance(self):
+        class FakeContainer:
+            def __init__(self, published_port=None):
+                self.status = "running"
+                self.attrs = {
+                    "NetworkSettings": {
+                        "Ports": {"8080/tcp": [{"HostPort": str(published_port)}]} if published_port else {}
+                    }
+                }
+                self.restart_calls = 0
+            def reload(self):
+                return None
+            def restart(self, timeout=10):
+                self.restart_calls += 1
+                self.status = "running"
+            def start(self):
+                self.status = "running"
+            def logs(self, **kwargs):
+                return b""
+
+        class FakeContainers:
+            def __init__(self, containers):
+                self._containers = containers
+            def get(self, container_id):
+                return self._containers[container_id]
+
+        class FakeDockerClient:
+            def __init__(self, containers):
+                self.containers = FakeContainers(containers)
+                self.closed = False
+            def close(self):
+                self.closed = True
+
+        lab = FakeContainer()
+        proxy = FakeContainer(published_port=49175)
+        fake_client = FakeDockerClient({"lab-id": lab, "proxy-id": proxy})
+        instance = models.ChallengeInstance(
+            user_id=self.user.id,
+            challenge_id=self.challenge.id,
+            container_id="lab-id",
+            proxy_container_id="proxy-id",
+            status="running",
+            host_port=49152,
+            created_at=datetime.now(timezone.utc).replace(tzinfo=None),
+            expires_at=datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(minutes=10),
+        )
+        self.db.add(instance)
+        self.db.commit()
+
+        with patch("docker_manager._docker_client", return_value=fake_client):
+            restart_instance(self.db, instance)
+
+        self.assertEqual(lab.restart_calls, 1)
+        self.assertEqual(proxy.restart_calls, 1)
+        self.assertEqual(instance.host_port, 49175)
+        self.assertEqual(instance.status, "running")
+        self.assertTrue(fake_client.closed)
+
+    def test_restart_rejects_stopped_instance_without_connecting_to_docker(self):
+        instance = models.ChallengeInstance(
+            user_id=self.user.id,
+            challenge_id=self.challenge.id,
+            container_id="lab-id",
+            proxy_container_id="proxy-id",
+            status="stopped",
+            expires_at=datetime.now(timezone.utc).replace(tzinfo=None),
+        )
+        with patch("docker_manager._docker_client", side_effect=AssertionError("Docker should not be called")):
+            with self.assertRaises(DockerManagerError):
+                restart_instance(self.db, instance)
+
+
+class DockerMetricsTests(unittest.TestCase):
+    def test_cpu_percentage_uses_cpu_and_system_deltas(self):
+        stats = {
+            "cpu_stats": {
+                "cpu_usage": {"total_usage": 300, "percpu_usage": [1, 1]},
+                "system_cpu_usage": 1200,
+                "online_cpus": 2,
+            },
+            "precpu_stats": {
+                "cpu_usage": {"total_usage": 200},
+                "system_cpu_usage": 1100,
+            },
+        }
+        self.assertEqual(calculate_cpu_percent(stats), 200.0)
+
+    def test_cpu_percentage_returns_none_without_valid_sample(self):
+        self.assertIsNone(calculate_cpu_percent({}))
+        self.assertIsNone(calculate_cpu_percent({
+            "cpu_stats": {"cpu_usage": {"total_usage": 10}, "system_cpu_usage": 100},
+            "precpu_stats": {"cpu_usage": {"total_usage": 5}, "system_cpu_usage": 100},
+        }))
+
+    def test_memory_usage_subtracts_inactive_file_cache(self):
+        stats = {
+            "memory_stats": {
+                "usage": 512 * 1024 * 1024,
+                "limit": 1024 * 1024 * 1024,
+                "stats": {"total_inactive_file": 128 * 1024 * 1024},
+            }
+        }
+        result = calculate_memory_usage(stats)
+        self.assertEqual(result["usage_bytes"], 384 * 1024 * 1024)
+        self.assertEqual(result["limit_bytes"], 1024 * 1024 * 1024)
+        self.assertEqual(result["percent"], 37.5)
+
+    def test_format_bytes_handles_missing_and_megabytes(self):
+        self.assertEqual(format_bytes(None), "—")
+        self.assertEqual(format_bytes(1024 * 1024), "1.0 MB")
 
 
 if __name__ == "__main__":
