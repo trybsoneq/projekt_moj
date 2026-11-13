@@ -3,9 +3,10 @@ import sqlite3
 import os
 
 app = Flask(__name__)
+PRODUCTS_DB_PATH = os.environ.get('PRODUCTS_DB_PATH', '/tmp/products.db')
 
 def init_db():
-    conn = sqlite3.connect('products.db')
+    conn = sqlite3.connect(PRODUCTS_DB_PATH)
     c = conn.cursor()
     
     c.execute('''CREATE TABLE IF NOT EXISTS products
@@ -74,7 +75,7 @@ def index():
 @app.route('/search')
 def search():
     query = request.args.get('q', '')
-    conn = sqlite3.connect('products.db')
+    conn = sqlite3.connect(PRODUCTS_DB_PATH)
     c = conn.cursor()
     
     sql = f"SELECT name, price FROM products WHERE name LIKE '%{query}%' AND hidden = 0"
