@@ -36,6 +36,79 @@
         </div>
     </div>
 
+    <div class="row gtr-50" style="margin:0 0 2em 0;">
+        <div class="col-6 col-12-small">
+            <div style="padding:1.25em; border:1px solid #444; border-radius:10px;">
+                <div style="display:flex; justify-content:space-between; gap:1em; flex-wrap:wrap;">
+                    <div>
+                        <div style="color:#aaa;">Poziom doświadczenia</div>
+                        <strong style="font-size:2em;">Poziom {{ level_info.level }}</strong>
+                    </div>
+                    <div style="text-align:right;">
+                        <div style="color:#aaa;">XP</div>
+                        <strong style="font-size:2em; color:#62b5ff;">{{ xp }}</strong>
+                    </div>
+                </div>
+                <div style="height:12px; background:#dedede; border-radius:20px; overflow:hidden; margin:.8em 0 .5em 0;">
+                    <div style="height:12px; width:{{ level_info.level_progress_percent }}%; max-width:100%; background:#3188bd; border-radius:20px;"></div>
+                </div>
+                <small style="color:#aaa;">{{ level_info.xp_in_level }} / {{ level_info.xp_per_level }} XP na tym poziomie · {{ level_info.xp_to_next_level }} XP do kolejnego poziomu</small>
+            </div>
+        </div>
+        <div class="col-6 col-12-small">
+            <div style="padding:1.25em; border:1px solid #444; border-radius:10px; height:100%;">
+                <div style="color:#aaa;">Seria dni z rozwiązanym zadaniem</div>
+                <div style="display:flex; gap:2em; align-items:center; margin-top:.4em; flex-wrap:wrap;">
+                    <div><strong style="font-size:2em; color:#e69b42;">🔥 {{ current_streak }}</strong><br><small style="color:#aaa;">Aktualna seria</small></div>
+                    <div><strong style="font-size:2em;">{{ longest_streak }}</strong><br><small style="color:#aaa;">Najdłuższa seria</small></div>
+                </div>
+                <small style="color:#aaa; display:block; margin-top:.7em;">Seria rośnie w dniu, w którym rozwiążesz co najmniej jedno zadanie.</small>
+            </div>
+        </div>
+    </div>
+
+    <header class="major">
+        <h2>Odznaki i osiągnięcia</h2>
+        <p>Zdobyte odznaki dają dodatkowe XP. Łącznie zdobyto {{ earned_achievements|length }} wpisów odznak.</p>
+    </header>
+    {% if earned_achievements %}
+        <div class="row gtr-50" style="margin-bottom:1.5em;">
+            {% for badge in earned_achievements %}
+            <div class="col-4 col-6-medium col-12-small">
+                <article style="height:100%; padding:1.1em; border:1px solid #438b67; border-radius:10px; background:rgba(55,184,120,.06); text-align:center;">
+                    <div style="font-size:2.3em;">{{ badge.icon }}</div>
+                    <strong style="display:block; margin:.35em 0;">{{ badge.name }}</strong>
+                    <p style="font-size:.85em; color:#aaa; margin:0;">{{ badge.description }}</p>
+                    {% if badge.challenge_title %}
+                        <small style="display:block; color:#aaa; margin-top:.5em;">{{ badge.challenge_title }}</small>
+                    {% endif %}
+                    <small style="display:block; color:#55bd82; margin-top:.5em;">+{{ badge.xp_awarded }} XP</small>
+                </article>
+            </div>
+            {% endfor %}
+        </div>
+    {% else %}
+        <p style="color:#aaa;">Nie zdobyto jeszcze żadnej odznaki. Rozwiąż zadanie, aby odblokować pierwszą.</p>
+    {% endif %}
+
+    {% if locked_achievements %}
+        <details style="margin:0 0 2em 0;">
+            <summary style="cursor:pointer; font-weight:bold;">Zobacz pozostałe odznaki ({{ locked_achievements|length }})</summary>
+            <div class="row gtr-50" style="margin-top:1em;">
+                {% for badge in locked_achievements %}
+                <div class="col-4 col-6-medium col-12-small">
+                    <article style="height:100%; padding:1em; border:1px dashed #777; border-radius:10px; text-align:center; opacity:.75;">
+                        <div style="font-size:2em; filter:grayscale(1);">{{ badge.icon }}</div>
+                        <strong style="display:block; margin:.35em 0;">{{ badge.name }}</strong>
+                        <p style="font-size:.85em; color:#aaa; margin:0;">{{ badge.description }}</p>
+                        <small style="display:block; margin-top:.5em; color:#aaa;">Nagroda: {{ badge.xp_reward }} XP</small>
+                    </article>
+                </div>
+                {% endfor %}
+            </div>
+        </details>
+    {% endif %}
+
     <header class="major">
         <h2>Postęp platformy</h2>
         <p>Ukończono {{ progress }}% dostępnych zadań.</p>
