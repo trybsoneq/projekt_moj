@@ -23,6 +23,7 @@ from docker_manager import (
     stop_instance,
 )
 from instance_routes import router as instance_router
+from infrastructure_routes import router as infrastructure_router
 from migrate_docker import migrate as migrate_docker
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
@@ -35,6 +36,7 @@ def verify_password(plain_password, hashed_password):
 
 app = FastAPI()
 app.include_router(instance_router)
+app.include_router(infrastructure_router)
 logger = logging.getLogger(__name__)
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -45,6 +47,7 @@ app.mount("/assets", StaticFiles(directory=os.path.join(ZEROFOUR_DIR, "assets"))
 app.mount("/images", StaticFiles(directory=os.path.join(ZEROFOUR_DIR, "images")), name="images")
 
 templates = Jinja2Templates(directory=TEMPLATES_DIR)
+app.state.templates = templates
 
 
 def init_database():
