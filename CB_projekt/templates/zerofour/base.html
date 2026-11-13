@@ -35,9 +35,12 @@
                                 </li>
                                 
                                 {% if username %}
-                                    {% if username == 'admin' %}
+                                    {% if is_admin|default(false) or username == 'admin' %}
                                         <li {% if active_page == 'admin' %}class="current_page_item"{% endif %}>
                                             <a href="/admin" style="color: #66b3ff;">Panel Administratora</a>
+                                        </li>
+                                        <li {% if active_page == 'infrastructure' %}class="current_page_item"{% endif %}>
+                                            <a href="/admin/infrastructure" style="color: #66b3ff;">Infrastruktura</a>
                                         </li>
                                     {% endif %}
                                     
