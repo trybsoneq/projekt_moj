@@ -97,3 +97,8 @@ Logi kontenera proxy:
 $proxy = docker ps -aq --filter "name=ctf-proxy-" | Select-Object -First 1
 if ($proxy) { docker logs $proxy }
 ```
+
+
+### Nginx na read-only filesystem
+
+Konfiguracja ingress proxy kieruje wszystkie katalogi tymczasowe Nginx (`client_body`, `proxy`, `fastcgi`, `uwsgi`, `scgi`) do katalogów pod `/tmp`. Kontener proxy ma zapisywalny `tmpfs` pod `/tmp`, natomiast jego główny system plików pozostaje tylko do odczytu. Dzięki temu Nginx nie próbuje tworzyć katalogów w `/var/cache/nginx`.
