@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, ForeignKey, DateTime, Text, Index, Boolean, CheckConstraint, UniqueConstraint
+from sqlalchemy import Column, Integer, String, ForeignKey, Date, DateTime, Text, Index, Boolean, CheckConstraint, UniqueConstraint
 from sqlalchemy.orm import relationship
 from database import Base
 import datetime
@@ -12,11 +12,16 @@ class User(Base):
     password_hash = Column(String, nullable=False)
     score = Column(Integer, default=0)
     role = Column(String(20), nullable=False, default="user", server_default="user")
+    xp = Column(Integer, nullable=False, default=0, server_default="0")
+    current_streak = Column(Integer, nullable=False, default=0, server_default="0")
+    longest_streak = Column(Integer, nullable=False, default=0, server_default="0")
+    last_solve_date = Column(Date, nullable=True)
 
     solves = relationship("Solve", back_populates="user")
     instances = relationship("ChallengeInstance", back_populates="user")
     submissions = relationship("Submission", back_populates="user")
     hint_unlocks = relationship("HintUnlock", back_populates="user", cascade="all, delete-orphan")
+    achievement_unlocks = relationship("UserAchievement", back_populates="user", cascade="all, delete-orphan")
 
 
 class Challenge(Base):
@@ -72,6 +77,45 @@ class Submission(Base):
     __table_args__ = (
         Index("ix_submissions_user_time", "user_id", "submitted_at"),
         Index("ix_submissions_challenge_result", "challenge_id", "is_correct"),
+    )
+
+
+class Achievement(Base):
+    """A seeded platform achievement or badge definition."""
+    __tablename__ = "achievements"
+
+    id = Column(Integer, primary_key=True, index=True)
+    code = Column(String(64), nullable=False, unique=True, index=True)
+    name = Column(String(100), nullable=False)
+    description = Column(Text, nullable=False)
+    icon = Column(String(16), nullable=False, default="🏅")
+    category = Column(String(32), nullable=False, default="general")
+    xp_reward = Column(Integer, nullable=False, default=0)
+    is_active = Column(Boolean, nullable=False, default=True)
+
+    unlocks = relationship("UserAchievement", back_populates="achievement", cascade="all, delete-orphan")
+
+
+class UserAchievement(Base):
+    """An earned badge. Context and event keys make awards idempotent."""
+    __tablename__ = "user_achievements"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    achievement_id = Column(Integer, ForeignKey("achievements.id", ondelete="CASCADE"), nullable=False, index=True)
+    challenge_id = Column(Integer, ForeignKey("challenges.id", ondelete="SET NULL"), nullable=True, index=True)
+    context_key = Column(String(100), nullable=False, default="global", server_default="global")
+    event_key = Column(String(150), nullable=True, unique=True)
+    awarded_at = Column(DateTime, nullable=False, default=datetime.datetime.utcnow, index=True)
+    xp_awarded = Column(Integer, nullable=False, default=0)
+
+    user = relationship("User", back_populates="achievement_unlocks")
+    achievement = relationship("Achievement", back_populates="unlocks")
+    challenge = relationship("Challenge")
+
+    __table_args__ = (
+        UniqueConstraint("user_id", "achievement_id", "context_key", name="uq_user_achievement_context"),
+        Index("ix_user_achievements_user_date", "user_id", "awarded_at"),
     )
 
 
