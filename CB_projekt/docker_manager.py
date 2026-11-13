@@ -28,7 +28,7 @@ SUPPORTED_TEMPLATES = {
     }
 }
 PROXY_CONTEXT = BASE_DIR / "docker_challanges" / "ingress_proxy"
-PROXY_IMAGE = "ctf-platform/ingress-proxy:stage2"
+PROXY_IMAGE = "ctf-platform/ingress-proxy:stage2-fix1"
 PROXY_PORT = 8080
 
 
