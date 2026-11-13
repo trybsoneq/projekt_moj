@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, ForeignKey, DateTime, Text
+from sqlalchemy import Column, Integer, String, ForeignKey, DateTime, Text, Index
 from sqlalchemy.orm import relationship
 from database import Base
 import datetime
@@ -14,6 +14,7 @@ class User(Base):
     role = Column(String(20), nullable=False, default="user", server_default="user")
 
     solves = relationship("Solve", back_populates="user")
+    instances = relationship("ChallengeInstance", back_populates="user")
 
 
 class Challenge(Base):
@@ -28,8 +29,10 @@ class Challenge(Base):
     points = Column(Integer, nullable=False)
     flag = Column(String, nullable=False)
     external_url = Column(String, nullable=True)
+    docker_template = Column(String(64), nullable=True)
 
     solves = relationship("Solve", back_populates="challenge")
+    instances = relationship("ChallengeInstance", back_populates="challenge")
 
 
 class Solve(Base):
@@ -42,3 +45,28 @@ class Solve(Base):
 
     user = relationship("User", back_populates="solves")
     challenge = relationship("Challenge", back_populates="solves")
+
+
+class ChallengeInstance(Base):
+    """One isolated Docker container assigned to one user and one challenge."""
+    __tablename__ = "challenge_instances"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    challenge_id = Column(Integer, ForeignKey("challenges.id", ondelete="CASCADE"), nullable=False, index=True)
+    container_id = Column(String(128), unique=True, nullable=True)
+    network_id = Column(String(128), nullable=True)
+    host_port = Column(Integer, nullable=True)
+    status = Column(String(24), nullable=False, default="starting", index=True)
+    created_at = Column(DateTime, nullable=False, default=datetime.datetime.utcnow)
+    expires_at = Column(DateTime, nullable=False)
+    stopped_at = Column(DateTime, nullable=True)
+    error_message = Column(Text, nullable=True)
+
+    user = relationship("User", back_populates="instances")
+    challenge = relationship("Challenge", back_populates="instances")
+
+    __table_args__ = (
+        Index("ix_challenge_instances_user_status", "user_id", "status"),
+        Index("ix_challenge_instances_expiry", "status", "expires_at"),
+    )
