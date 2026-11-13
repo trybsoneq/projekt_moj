@@ -55,8 +55,10 @@ class ChallengeInstance(Base):
     user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
     challenge_id = Column(Integer, ForeignKey("challenges.id", ondelete="CASCADE"), nullable=False, index=True)
     container_id = Column(String(128), unique=True, nullable=True)
-    network_id = Column(String(128), nullable=True)
-    host_port = Column(Integer, nullable=True)
+    network_id = Column(String(128), nullable=True)  # private, internal challenge network
+    proxy_container_id = Column(String(128), unique=True, nullable=True)
+    ingress_network_id = Column(String(128), nullable=True)
+    host_port = Column(Integer, nullable=True)  # published port of the trusted proxy
     status = Column(String(24), nullable=False, default="starting", index=True)
     created_at = Column(DateTime, nullable=False, default=datetime.datetime.utcnow)
     expires_at = Column(DateTime, nullable=False)
