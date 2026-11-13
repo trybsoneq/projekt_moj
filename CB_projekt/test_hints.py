@@ -135,7 +135,9 @@ class MultiLevelHintTests(unittest.TestCase):
         self.assertEqual(self.db.query(models.HintUnlock).count(), 1)
         self.assertFalse(first.is_active)
         active_view = get_hint_view(self.db, self.challenge, self.user)
-        self.assertEqual([row["level"] for row in active_view], [2, 3])
+        self.assertEqual([row["level"] for row in active_view], [1, 2, 3])
+        self.assertTrue(active_view[0]["is_unlocked"])
+        self.assertEqual(active_view[0]["content"], "Pierwszy trop")
 
 
 if __name__ == "__main__":
