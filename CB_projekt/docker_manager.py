@@ -70,13 +70,15 @@ def instance_url(instance: models.ChallengeInstance) -> Optional[str]:
 def _docker_client():
     try:
         import docker
-        from docker.errors import DockerException
+        from docker.errors import DockerException, ImageNotFound
     except ImportError as exc:
         raise DockerManagerError(
             "Brakuje biblioteki Docker SDK. Wykonaj: pip install -r requirements.txt."
         ) from exc
     try:
-        return docker.from_env(timeout=15)
+        # Image builds can take longer than a short request timeout, especially
+        # on the first run when Docker must download base images.
+        return docker.from_env(timeout=180)
     except DockerException as exc:
         raise DockerManagerError(
             "Nie można połączyć się z Dockerem. Uruchom Docker Desktop lub usługę Docker."
@@ -152,27 +154,33 @@ def start_or_get_instance(db, user: models.User, challenge: models.Challenge):
     try:
         client = _docker_client()
         image_name = config["image"]
+        logger.info("CTF instance %s: checking challenge image %s", instance.id, image_name)
         try:
             client.images.get(image_name)
-        except Exception:
+        except ImageNotFound:
+            logger.info("CTF instance %s: building challenge image", instance.id)
             try:
                 client.images.build(path=str(context), tag=image_name, rm=True)
             except Exception as exc:
                 raise DockerManagerError(
                     "Nie udało się zbudować obrazu zadania. Sprawdź Dockerfile i połączenie z Dockerem."
                 ) from exc
+        logger.info("CTF instance %s: challenge image is ready", instance.id)
 
         if not PROXY_CONTEXT.is_dir():
             raise DockerManagerError("Brakuje katalogu z definicją bramy dostępowej Docker.")
+        logger.info("CTF instance %s: checking ingress proxy image %s", instance.id, PROXY_IMAGE)
         try:
             client.images.get(PROXY_IMAGE)
-        except Exception:
+        except ImageNotFound:
+            logger.info("CTF instance %s: building ingress proxy image", instance.id)
             try:
                 client.images.build(path=str(PROXY_CONTEXT), tag=PROXY_IMAGE, rm=True)
             except Exception as exc:
                 raise DockerManagerError(
                     "Nie udało się zbudować obrazu bramy dostępowej. Sprawdź Dockerfile proxy i połączenie z Dockerem."
                 ) from exc
+        logger.info("CTF instance %s: ingress proxy image is ready", instance.id)
 
         token = uuid.uuid4().hex[:12]
         labels = {
@@ -205,11 +213,10 @@ def start_or_get_instance(db, user: models.User, challenge: models.Challenge):
 
         port = int(config["container_port"])
         bind_host = os.getenv("CTF_DOCKER_BIND_HOST", "127.0.0.1").strip()
-        container = client.containers.run(
+        logger.info("CTF instance %s: creating private challenge container", instance.id)
+        container = client.containers.create(
             image_name,
-            detach=True,
             name=f"ctf-lab-{instance.id}-{token}",
-            network=network.name,
             mem_limit="256m",
             nano_cpus=500_000_000,
             pids_limit=64,
@@ -223,7 +230,11 @@ def start_or_get_instance(db, user: models.User, challenge: models.Challenge):
         )
         instance.container_id = container.id
         db.commit()
+        # Attach exactly once, before start, with a stable DNS alias for Nginx.
         network.connect(container, aliases=["challenge"])
+        container.start()
+        container.reload()
+        logger.info("CTF instance %s: private challenge container is running", instance.id)
 
         # Create the proxy on the non-internal ingress network so Docker can
         # publish its host port. Attach it to the private network before start,
@@ -247,8 +258,10 @@ def start_or_get_instance(db, user: models.User, challenge: models.Challenge):
         instance.proxy_container_id = proxy.id
         db.commit()
         network.connect(proxy, aliases=["ingress-proxy"])
+        logger.info("CTF instance %s: starting ingress proxy", instance.id)
         proxy.start()
         proxy.reload()
+        logger.info("CTF instance %s: ingress proxy state=%s", instance.id, proxy.status)
 
         bindings = proxy.attrs.get("NetworkSettings", {}).get("Ports", {})
         host_bindings = bindings.get(f"{PROXY_PORT}/tcp") or []
@@ -264,6 +277,12 @@ def start_or_get_instance(db, user: models.User, challenge: models.Challenge):
             raise DockerManagerError("Docker nie przydzielił portu dla bramy dostępowej środowiska.")
 
         instance.host_port = int(host_bindings[0]["HostPort"])
+        logger.info(
+            "CTF instance %s: proxy published at %s:%s",
+            instance.id,
+            bind_host,
+            instance.host_port,
+        )
         instance.status = "running"
         instance.error_message = None
         db.commit()
