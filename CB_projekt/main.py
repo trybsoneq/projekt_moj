@@ -4,6 +4,8 @@ from fastapi.templating import Jinja2Templates
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import RedirectResponse, FileResponse
 import os
+import asyncio
+import logging
 
 from sqlalchemy.orm import Session
 from database import engine, Base, get_db, SessionLocal
@@ -11,6 +13,16 @@ import models
 
 from passlib.context import CryptContext
 from security import get_current_user, require_admin, set_session_cookie, clear_session_cookie
+from docker_manager import (
+    CLEANUP_INTERVAL_SECONDS,
+    cleanup_expired_instances,
+    get_active_instance,
+    instance_url,
+    is_supported_template,
+    stop_instance,
+)
+from instance_routes import router as instance_router
+from migrate_docker import migrate as migrate_docker
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
@@ -28,6 +40,8 @@ else:
     Base.metadata.create_all(bind=engine)
 
 app = FastAPI()
+app.include_router(instance_router)
+logger = logging.getLogger(__name__)
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 TEMPLATES_DIR = os.path.join(BASE_DIR, "templates")
@@ -72,7 +86,8 @@ def init_database():
                     category="Web Exploitation",
                     points=150,
                     flag="CTF{sql_injection_master}",
-                    external_url="http://127.0.0.1:5000"
+                    external_url=None,
+                    docker_template="web_sqli"
                 )
             ]
             db.add_all(zadania)
@@ -89,7 +104,35 @@ def init_database():
     finally:
         db.close()
 
+migrate_docker()
 init_database()
+
+
+async def _instance_cleanup_worker():
+    while True:
+        try:
+            await asyncio.to_thread(cleanup_expired_instances)
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            logger.exception("Błąd okresowego sprzątania instancji Docker")
+        await asyncio.sleep(CLEANUP_INTERVAL_SECONDS)
+
+
+@app.on_event("startup")
+async def start_instance_cleanup_worker():
+    app.state.instance_cleanup_task = asyncio.create_task(_instance_cleanup_worker())
+
+
+@app.on_event("shutdown")
+async def stop_instance_cleanup_worker():
+    task = getattr(app.state, "instance_cleanup_task", None)
+    if task:
+        task.cancel()
+        try:
+            await task
+        except asyncio.CancelledError:
+            pass
 
 
 def get_user_points(db: Session, user):
@@ -233,9 +276,14 @@ def add_challenge(
     points: int = Form(...),
     flag: str = Form(...),
     external_url: str = Form(None),
+    docker_template: str = Form(""),
     current_admin: models.User = Depends(require_admin),
     db: Session = Depends(get_db)
 ):
+    docker_template = docker_template.strip() or None
+    if not is_supported_template(docker_template):
+        raise HTTPException(status_code=400, detail="Nieobsługiwany szablon Docker.")
+
     new_challenge = models.Challenge(
         title=title,
         description=description,
@@ -244,7 +292,8 @@ def add_challenge(
         category=category,
         points=points,
         flag=flag,
-        external_url=external_url
+        external_url=None if docker_template else (external_url.strip() or None),
+        docker_template=docker_template
     )
     db.add(new_challenge)
     db.commit()
@@ -258,6 +307,12 @@ def delete_challenge(
 ):
     challenge = db.query(models.Challenge).filter(models.Challenge.id == challenge_id).first()
     if challenge:
+        active_instances = db.query(models.ChallengeInstance).filter(
+            models.ChallengeInstance.challenge_id == challenge_id,
+            models.ChallengeInstance.status.in_(["starting", "running", "stop_failed"]),
+        ).all()
+        for instance in active_instances:
+            stop_instance(db, instance)
         db.delete(challenge)
         db.commit()
     return RedirectResponse(url="/admin", status_code=status.HTTP_302_FOUND)
@@ -273,9 +328,13 @@ def edit_challenge(
     points: int = Form(...),
     flag: str = Form(...),
     external_url: str = Form(None),
+    docker_template: str = Form(""),
     current_admin: models.User = Depends(require_admin),
     db: Session = Depends(get_db)
 ):
+    docker_template = docker_template.strip() or None
+    if not is_supported_template(docker_template):
+        raise HTTPException(status_code=400, detail="Nieobsługiwany szablon Docker.")
     challenge = db.query(models.Challenge).filter(models.Challenge.id == challenge_id).first()
     if challenge:
         challenge.title = title
@@ -285,7 +344,8 @@ def edit_challenge(
         challenge.category = category
         challenge.points = points
         challenge.flag = flag
-        challenge.external_url = external_url
+        challenge.docker_template = docker_template
+        challenge.external_url = None if docker_template else (external_url.strip() or None)
         db.commit()
     return RedirectResponse(url="/admin", status_code=status.HTTP_302_FOUND)
 
@@ -332,6 +392,10 @@ def show_challenge(request: Request, challenge_id: int, current_user: models.Use
     
     logged_in_user = current_user.username if current_user else None
     user_points = get_user_points(db, current_user)
+    active_instance = get_active_instance(db, current_user.id, challenge.id) if current_user else None
+    current_instance_url = instance_url(active_instance) if active_instance else None
+    instance_error = request.query_params.get("instance_error")
+    instance_notice = request.query_params.get("instance_started") or request.query_params.get("instance_stopped")
     
     return templates.TemplateResponse(
         request,
@@ -342,6 +406,10 @@ def show_challenge(request: Request, challenge_id: int, current_user: models.Use
             "is_admin": bool(current_user and current_user.role == "admin"),
             "challenge": challenge,
             "user_points": user_points,
+            "current_instance": active_instance,
+            "current_instance_url": current_instance_url,
+            "instance_error": instance_error,
+            "instance_notice": instance_notice,
             "active_page": "home"
         }
     )
