@@ -69,3 +69,10 @@ Testy jednostkowe nie wymagają demona Docker. Rzeczywiste budowanie obrazów i 
 ## Uwaga bezpieczeństwa
 
 Zadanie SQL Injection jest celowo podatne i powinno być udostępniane wyłącznie w odizolowanym laboratorium. Kontener laboratorium nie ma montowań hosta, socketu Dockera ani zewnętrznej sieci. Zaufany proxy ma dostęp do ingress i do sieci prywatnej laboratorium, ale obsługuje wyłącznie statyczny upstream.
+
+
+## Wspólna baza i automatyczne migracje
+
+Aplikacja oraz skrypty migracyjne korzystają z tej samej, bezwzględnej ścieżki `CTF_DATABASE_PATH` (domyślnie: plik `ctf_platform.db` obok `database.py`). Przy imporcie aplikacji automatycznie i idempotentnie uruchamiane są migracje ról oraz instancji Docker. Możesz nadal uruchamiać `python migrate_roles.py` i `python migrate_docker.py` ręcznie.
+
+Po uruchomieniu serwera sprawdź w terminalu komunikat `Używana baza SQLite: ...` i `Kolumna users.role: OK`. Jeżeli masz istniejącą bazę poza katalogiem projektu, przed uruchomieniem ustaw `CTF_DATABASE_PATH` na jej pełną ścieżkę. Nie kasuj starego pliku bazy.
