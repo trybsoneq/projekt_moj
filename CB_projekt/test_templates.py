@@ -30,6 +30,18 @@ class TemplateCompilationTests(unittest.TestCase):
     def test_admin_activity_template_compiles(self):
         self.environment.get_template("zerofour/admin_activity.html")
 
+    def test_challenge_template_compiles(self):
+        self.environment.get_template("zerofour/challenge.html")
+
+    def test_base_template_loads_custom_navigation_css(self):
+        base_path = TEMPLATE_DIR / "zerofour" / "base.html"
+        css_path = TEMPLATE_DIR / "zerofour" / "assets" / "css" / "custom.css"
+        source = base_path.read_text(encoding="utf-8")
+        css = css_path.read_text(encoding="utf-8")
+        self.assertIn("/assets/css/custom.css", source)
+        self.assertIn("#nav > ul", css)
+        self.assertIn("flex-wrap: wrap", css)
+
 
 if __name__ == "__main__":
     unittest.main()
