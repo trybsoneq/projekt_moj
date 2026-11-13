@@ -1,0 +1,49 @@
+{% extends "zerofour/base.html" %}
+
+{% block content %}
+<section class="container box" style="max-width: 800px; margin: 0 auto; padding: 3em;">
+    <header class="major" style="text-align: center;">
+        <h2>Tabela Wyników (Scoreboard)</h2>
+        <p>Zobacz, kto zdobył najwięcej punktów i prowadzi w rankingu!</p>
+    </header>
+
+    <div style="overflow-x: auto; margin-top: 2em;">
+        <table style="width: 100%; border-collapse: collapse; text-align: left;">
+            <thead>
+                <tr style="background: #303238; color: #fff; font-weight: bold;">
+                    <th style="padding: 12px; border: 1px solid #444;">Pozycja</th>
+                    <th style="padding: 12px; border: 1px solid #444;">Gracz</th>
+                    <th style="padding: 12px; border: 1px solid #444;">Punkty</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for user in users %}
+                <tr>
+                    <td style="padding: 12px; border: 1px solid #444;">
+                        {% if loop.index == 1 %}🥇
+                        {% elif loop.index == 2 %}🥈
+                        {% elif loop.index == 3 %}🥉
+                        {% else %}{{ loop.index }}{% endif %}
+                    </td>
+                    <td style="padding: 12px; border: 1px solid #444;">
+                        <strong>{{ user.username }}</strong>
+                        {% if user.username == username %}
+                            <span style="color: #00c521; font-size: 0.8em;"> (Ty)</span>
+                        {% endif %}
+                    </td>
+                    <td style="padding: 12px; border: 1px solid #444;">{{ user.score }} pkt</td>
+                </tr>
+                {% else %}
+                <tr>
+                    <td colspan="3" style="padding: 12px; text-align: center; color: #aaa;">Brak zarejestrowanych użytkowników.</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <div style="text-align: center; margin-top: 2em;">
+        <a href="/" class="button alt">Wróć do listy zadań</a>
+    </div>
+</section>
+{% endblock %}

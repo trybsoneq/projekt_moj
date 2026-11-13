@@ -1,0 +1,21 @@
+{% extends "zerofour/base.html" %}
+
+{% block content %}
+<section class="container box" style="max-width: 800px; margin: 0 auto; padding: 3em;">
+    <header class="major" style="text-align: center;">
+        <h2>Zasady i FAQ</h2>
+        <p>Zapoznaj się z zasadami przed przystąpieniem do rozwiązywania zadań.</p>
+    </header>
+
+    <article>
+        <h3>1. Jak grać?</h3>
+        <p>Twoim celem jest analiza zadań i odnalezienie ukrytego ciągu znaków zwanego <strong>flagą</strong>. Format flagi w naszym systemie to zazwyczaj: <code>CTF{tekst_hasla}</code>.</p>
+
+        <h3>2. Gdzie wpisać flagę?</h3>
+        <p>Po zalogowaniu i kliknięciu przycisku "Rozwiąż" przy wybranym wyzwaniu, zobaczysz pole tekstowe, w które należy wkleić zdobyty ciąg znaków.</p>
+
+        <h3>3. Czego nie wolno robić?</h3>
+        <p style="color: #ff6666;">Zabronione jest atakowanie samej infrastruktury platformy (serwera, bazy danych) oraz współdzielenie flag z innymi użytkownikami. Grajmy fair-play!</p>
+    </article>
+</section>
+{% endblock %}

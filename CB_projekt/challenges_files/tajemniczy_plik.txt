@@ -1,0 +1,54 @@
+Raport z audytu wewnętrznego - 15.03.2025
+==========================================
+
+Szanowni Państwo,
+
+niniejszym przekazujemy raport z przeprowadzonego audytu systemów
+informatycznych. W wyniku kontroli stwierdzono następujące
+nieprawidłowości:
+
+1. Brak aktualizacji oprogramowania na serwerze produkcyjnym
+2. Niezabezpieczone endpointy API w aplikacji głównej
+3. Przechowywanie haseł w postaci jawnej w plikach konfiguracyjnych
+4. Brak dwuskładnikowego uwierzytelniania dla dostępu zdalnego
+
+Zalecenia:
+- Wdrożyć politykę regularnych aktualizacji
+- Zastosować szyfrowanie komunikacji TLS
+- Przeprowadzić szkolenie z bezpieczeństwa dla personelu
+
+W załączniku znajduje się szczegółowa lista podatności wraz z
+proponowanymi rozwiązaniami. Proszę o zapoznanie się z raportem
+i wdrożenie zaleceń w ciągu 14 dni.
+
+Z poważaniem,
+Zespół Audytu Wewnętrznego
+
+---
+DODATKOWE INFORMACJE:
+
+Parametry połączenia z bazą danych:
+Host: db.internal.company
+Port: 5432
+User: audit_user
+
+Uwaga: powyższe dane są wrażliwe i nie powinny być udostępniane
+osobom nieupoważnionym.
+
+---
+
+Poniżej fragment dziennika zdarzeń (log) z dnia 10.03.2025:
+
+[10:21:43] User: admin | Action: LOGIN | Status: SUCCESS | Source: 192.168.1.100
+[10:22:12] User: admin | Action: FILE_ACCESS | Target: /etc/shadow | Status: DENIED
+[10:22:55] User: user1 | Action: FILE_ACCESS | Target: /home/user1/flag.txt | Status: ALLOWED
+[10:23:01] User: user1 | Action: READ | Target: /home/user1/flag.txt | Status: SUCCESS
+
+Użytkownik user1 miał dostęp do pliku flag.txt. Możliwe, że znajdował
+się on w jego katalogu domowym. Logi wskazują na potencjalne
+naruszenie bezpieczeństwa.
+
+W pliku flag.txt znaleziono zaszyfrowaną wiadomości: 
+----------------------------------------
+Q1RGe2ZsYWdhX3BsaWt1X2ZsYWcudHh0fQ==
+----------------------------------------

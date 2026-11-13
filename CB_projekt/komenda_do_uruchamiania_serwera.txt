@@ -1,0 +1,3 @@
+cd challenges_files/podatna_wyszukiwarka
+python app.py
+python -m uvicorn main:app --reload

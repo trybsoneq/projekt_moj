@@ -1,0 +1,86 @@
+{% extends "zerofour/base.html" %}
+
+{% block content %}
+<section class="container box" style="max-width: 800px; margin: 0 auto; padding: 3em;">
+    <header class="major" style="text-align: center;">
+        <h2>{{ challenge.title }}</h2>
+        <p style="color: #aaa;">
+            {{ challenge.category }} | {{ challenge.points }} punktow
+        </p>
+    </header>
+
+    <div style="margin: 2em 0; padding: 1em; background: rgba(255,255,255,0.05); border-radius: 10px; text-align: justify; text-justify: inter-word;">
+        <p style="margin: 0;">{{ challenge.long_description if challenge.long_description else challenge.description }}</p>
+    </div>
+
+    <!-- Przycisk do pokazania wskazowki -->
+    <div style="text-align: center; margin: 1.5em 0;">
+        <button onclick="toggleHint()" class="button alt" style="cursor: pointer;">
+            Pokaż wskazówkę
+        </button>
+    </div>
+
+    <!-- Wskazowka (ukryta domyslnie) -->
+    <div id="hintBox" style="display: none; margin: 1.5em 0; padding: 1em; background: rgba(0,200,255,0.05); border-radius: 8px; border: 1px dashed #3081af; text-align: justify; text-justify: inter-word;">
+        <p style="margin: 0; font-size: 0.9em; color: #50a1cf;">
+            <strong>Wskazowka:</strong> {{ challenge.hint if challenge.hint else "Brak wskazowki." }}
+        </p>
+    </div>
+
+    <div style="text-align: center; margin: 2em 0;">
+        {% if challenge.external_url %}
+            <!-- Jeśli zadanie ma link zewnętrzny - pokaż przycisk "Otwórz stronę" -->
+            <a href="{{ challenge.external_url }}" target="_blank" class="button large icon solid fa-external-link-alt">
+                Otwórz stronę
+            </a>
+        {% else %}
+            <!-- Jeśli nie ma linku - pokaż "Pobierz plik" -->
+            <a href="/download/{{ challenge.id }}" class="button large icon solid fa-download">
+                Pobierz plik
+            </a>
+        {% endif %}
+    </div>
+
+    <div style="margin-top: 2em; padding: 1.5em; border-radius: 10px;">
+        <h3 style="text-align: center; margin-bottom: 1em;">Sprawdź flage</h3>
+        <form method="POST" action="/challenge/{{ challenge.id }}/check" style="display: flex; gap: 10px; flex-wrap: wrap; justify-content: center;" onsubmit="return validateFlag()">
+            <input type="text" name="flag" id="flagInput" placeholder="Wpisz flage..." style="flex: 1; min-width: 250px; padding: 12px; border: 1px solid #444; border-radius: 8px;">
+            <button type="submit" class="button">Sprawdź</button>
+        </form>
+        <div style="text-align: center; margin-top: 10px;">
+            {% if message %}
+                <p style="color: {% if solved %}green{% else %}red{% endif %}; font-weight: bold;">
+                    {{ message }}
+                </p>
+            {% endif %}
+        </div>
+    </div>
+
+    <div style="text-align: center; margin-top: 2em;">
+        <a href="/" class="button alt">Wróć do listy zadań</a>
+    </div>
+</section>
+
+<script>
+    function toggleHint() {
+        var hintBox = document.getElementById('hintBox');
+        var btn = document.querySelector('button[onclick="toggleHint()"]');
+        if (hintBox.style.display === 'none') {
+            hintBox.style.display = 'block';
+            btn.textContent = 'Ukryj wskazówkę';
+        } else {
+            hintBox.style.display = 'none';
+            btn.textContent = 'Pokaż wskazówkę';
+        }
+    }
+
+    function validateFlag() {
+        var flagInput = document.getElementById('flagInput');
+        if (flagInput.value.trim() === '') {
+            alert('Wpisz flagę przed sprawdzeniem!');
+            return false;
+        }
+        return true;
+    }
+</script>
+{% endblock %}

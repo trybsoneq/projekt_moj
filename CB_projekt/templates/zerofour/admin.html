@@ -1,0 +1,154 @@
+<!-- Trzeba w przyszlosci przeniesc style do main.css ale na razie mi cos nie dziala a nie mam czasu szukac czemu -->
+
+{% extends "zerofour/base.html" %}
+
+{% block banner %}
+<!-- BANER -->
+<div id="banner" style="text-align:center !important;">
+    <h2 style="text-align:center !important;">
+        Witaj w panelu operacyjnym, {{ username }}!
+    </h2>
+    <p style="text-align:center !important; width:100%;">
+        System czeka na Twoje polecenia. Przewiń w dół, wybierz cel i zdobądź kolejną flagę.
+    </p>
+    <br>
+    <div style="text-align:center; margin-top:100px;">
+        <a href="#main-wrapper" class="button large icon solid fa-arrow-down">Dodaj nowe zadania</a>
+    </div>
+</div>
+{% endblock %}
+
+{% block content %}
+<section class="container box" style="max-width: 700px; margin: 0 auto; padding: 3em;">
+    <header class="major" style="text-align: center;">
+        <h2>Dodaj nowe wyzwanie CTF</h2>
+        <p>Wypełnij formularz, aby opublikować zadanie dla graczy.</p>
+    </header>
+
+    <form method="POST" action="/admin/add-challenge" class="admin-form">
+        <div class="row gtr-50">
+            <div class="col-12">
+                <input type="text" name="title" placeholder="Tytuł zadania (np. Podatna wyszukiwarka)" required />
+            </div>
+            <div class="col-12">
+                <textarea name="description" placeholder="Opis zadania i wskazówki dla studenta..." rows="4" required></textarea>
+            </div>
+            <div class="col-12">
+                <input type="text" name="external_url" placeholder="Link do zewnętrznej aplikacji (np. http://127.0.0.1:5000)" style="width:100%; padding:12px; background:#222; color:#fff; border:1px solid #444; border-radius:8px; margin-bottom:15px;">
+            </div>
+            <div class="col-6 col-12-small">
+                <select name="category" required>
+                    <option value="" disabled selected>Wybierz kategorię...</option>
+                    <option value="Web Exploitation">Web Exploitation</option>
+                    <option value="Cryptography">Cryptography</option>
+                    <option value="Forensics">Forensics</option>
+                </select>
+            </div>
+            <div class="col-6 col-12-small">
+                <input type="number" name="points" placeholder="Liczba punktów (np. 100)" required />
+            </div>
+            <div class="col-12">
+                <input type="text" name="flag" placeholder="Prawidłowa flaga (np. CTF{twoj_sekret})" required />
+            </div>
+            <div class="col-12" style="text-align: center; margin-top: 2em;">
+                <ul class="actions" style="display: inline-flex; justify-content: center; width: 100%;">
+                    <li><input type="submit" class="button large" value="Opublikuj zadanie" /></li>
+                </ul>
+            </div>
+        </div>
+    </form>
+</section>
+<!-- LISTA ZADAŃ - TYLKO DODANIE BORDER -->
+<section class="container box" style="max-width: 900px; margin: 3em auto 0 auto; padding: 2em;">
+    <header class="major" style="text-align: center;">
+        <h2>Istniejące zadania</h2>
+        <p>Kliknij "Edytuj" lub "Usuń", aby zarządzać zadaniami.</p>
+    </header>
+
+    {% if challenges %}
+        {% for challenge in challenges %}
+        <div style="background: rgba(255,255,255,0.05); border-radius: 10px; padding: 15px; margin-bottom: 15px; border: 1px solid #444;">
+            <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 10px;">
+                <div>
+                    <strong>{{ challenge.title }}</strong><br>
+                    <span style="color: #aaa; font-size: 0.85em;">{{ challenge.category }} | {{ challenge.points }} pkt</span><br>
+                    <span style="color: #666; font-size: 0.8em;">Flaga: {{ challenge.flag }}</span><br>
+                    <span style="color: #555; font-size: 0.75em;">ID: {{ challenge.id }}</span>
+                </div>
+                <div style="display: flex; gap: 10px;">
+                    <button class="edit-btn" 
+                        data-id="{{ challenge.id }}"
+                        data-title="{{ challenge.title }}"
+                        data-description="{{ challenge.description }}"
+                        data-category="{{ challenge.category }}"
+                        data-points="{{ challenge.points }}"
+                        data-flag="{{ challenge.flag }}"
+                        style="background: #ffaa00; color: #1a1a1a; border: none; padding: 8px 20px; border-radius: 6px; cursor: pointer;">Edytuj</button>
+                    <form method="POST" action="/admin/delete-challenge" style="margin: 0;" onsubmit="return confirm('Usunąć zadanie?');">
+                        <input type="hidden" name="challenge_id" value="{{ challenge.id }}">
+                        <button type="submit" style="background: #ff4444; color: white; border: none; padding: 8px 20px; border-radius: 6px; cursor: pointer;">Usuń</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    {% else %}
+        <p style="text-align: center; color: #aaa;">Brak zadań w bazie. Dodaj pierwsze zadanie powyżej!</p>
+    {% endif %}
+</section>
+
+<!-- MODAL EDYCJI - DOPASOWANY DO STYLU STRONY -->
+<div id="editModal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); z-index: 1000; justify-content: center; align-items: center;">
+    <div style="background: #fff; max-width: 600px; width: 90%; padding: 30px; border-radius: 15px; box-shadow: 0 5px 25px rgba(0,0,0,0.3);">
+        <h2 style="text-align: center; margin-bottom: 20px; color: #404248; font-size: 1.6em; text-transform: uppercase; font-weight: 800;">Edytuj zadanie</h2>
+        <form method="POST" action="/admin/edit-challenge" id="editForm">
+            <input type="hidden" name="challenge_id" id="edit_id">
+            <div class="row gtr-50">
+                <div class="col-12">
+                    <input type="text" name="title" id="edit_title" placeholder="Tytuł zadania" required style="width:100%; padding:12px; background:#fff; color:#333; border:1px solid #ddd; border-radius:8px; margin-bottom:15px;">
+                </div>
+                <div class="col-12">
+                    <textarea name="description" id="edit_description" placeholder="Opis zadania" rows="4" required style="width:100%; padding:12px; background:#fff; color:#333; border:1px solid #ddd; border-radius:8px; margin-bottom:15px;"></textarea>
+                </div>
+                <div class="col-6 col-12-small">
+                    <select name="category" id="edit_category" style="width:100%; height:45px; padding:0 12px; background:#fff; color:#333; border:1px solid #ddd; border-radius:8px; margin-bottom:15px; box-sizing:border-box;">
+                        <option value="Web Exploitation">Web Exploitation</option>
+                        <option value="Cryptography">Cryptography</option>
+                        <option value="Forensics">Forensics</option>
+                    </select>
+                </div>
+                <div class="col-6 col-12-small">
+                    <input type="number" name="points" id="edit_points" placeholder="Liczba punktów" required style="width:100%; height:45px; padding:0 12px; background:#fff; color:#333; border:1px solid #ddd; border-radius:8px; margin-bottom:15px; box-sizing:border-box;">
+                </div>
+                <div class="col-12">
+                    <input type="text" name="flag" id="edit_flag" placeholder="Flaga" required style="width:100%; padding:12px; background:#fff; color:#333; border:1px solid #ddd; border-radius:8px; margin-bottom:20px;">
+                </div>
+                <div class="col-12" style="text-align: center;">
+                    <ul class="actions" style="display: inline-flex; justify-content: center; gap: 1em; margin: 0;">
+                        <li><button type="submit" class="button" style="background:#4091bf; color:#fff; border:none; padding:12px 30px; border-radius:8px; font-weight:bold; cursor:pointer;">Zapisz zmiany</button></li>
+                        <li><button type="button" class="button alt" onclick="closeEditModal()" style="background:#464a52; color:#fff; border:none; padding:12px 30px; border-radius:8px; cursor:pointer;">Anuluj</button></li>
+                    </ul>
+                </div>
+            </div>
+        </form>
+    </div>
+</div>
+<script>
+    // Obsługa przycisków edycji przez data-* atrybuty
+    document.querySelectorAll('.edit-btn').forEach(btn => {
+        btn.addEventListener('click', function() {
+            document.getElementById('edit_id').value = this.dataset.id;
+            document.getElementById('edit_title').value = this.dataset.title;
+            document.getElementById('edit_description').value = this.dataset.description;
+            document.getElementById('edit_category').value = this.dataset.category;
+            document.getElementById('edit_points').value = this.dataset.points;
+            document.getElementById('edit_flag').value = this.dataset.flag;
+            document.getElementById('editModal').style.display = 'flex';
+        });
+    });
+    
+    function closeEditModal() {
+        document.getElementById('editModal').style.display = 'none';
+    }
+</script>
+{% endblock %}

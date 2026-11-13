@@ -1,0 +1,77 @@
+{% extends "zerofour/base.html" %}
+
+{% block banner %}
+<div id="banner" style="text-align:center !important;">
+    <h2 style="text-align:center !important;">Sprawdź swoje umiejętności w świecie cyberbezpieczeństwa</h2>
+    <p style="text-align:center !important; width:100%;">
+        Rozwiązuj praktyczne zadania typu Capture The Flag, <br>
+        analizuj podatności i pnij się w rankingu.
+        <br>
+        Gotowy na wyzwanie? Załóż konto i dołącz do gry!<br>
+    </p>
+    <br>
+    <div style="text-align:center; margin-top:100px;">
+        {% if username %}
+            <a href="#main-wrapper" class="button large icon solid fa-arrow-down">
+                Przejdź do zadań
+            </a>
+        {% else %}
+            <a href="/register" class="button large icon solid fa-terminal">
+                Rozpocznij hackowanie
+            </a>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
+
+{% block content %}
+<section class="container box feature1">
+    <div class="row">
+        <div class="col-12">
+            <header class="first major">
+                <h2>Wyzwania CTF</h2>
+                <p>Zaloguj się, rozwiązuj zadania i zdobywaj punkty!</p>
+            </header>
+            
+            <!-- FILTR KATEGORII -->
+            <div style="text-align: center; margin: 1.5em 0 2em 0;">
+                <div style="display: inline-flex; gap: 10px; flex-wrap: wrap; justify-content: center;">
+                    <a href="/#main-wrapper" class="button alt" style="font-size: 0.8em; padding: 0.5em 1.2em; {% if not selected_category %}background: #4091bf; color: #fff;{% endif %}">Wszystkie</a>
+                    <a href="/?category=Web%20Exploitation#main-wrapper" class="button alt" style="font-size: 0.8em; padding: 0.5em 1.2em; {% if selected_category == 'Web Exploitation' %}background: #4091bf; color: #fff;{% endif %}">Web Exploitation</a>
+                    <a href="/?category=Cryptography#main-wrapper" class="button alt" style="font-size: 0.8em; padding: 0.5em 1.2em; {% if selected_category == 'Cryptography' %}background: #4091bf; color: #fff;{% endif %}">Cryptography</a>
+                    <a href="/?category=Forensics#main-wrapper" class="button alt" style="font-size: 0.8em; padding: 0.5em 1.2em; {% if selected_category == 'Forensics' %}background: #4091bf; color: #fff;{% endif %}">Forensics</a>
+                </div>
+            </div>
+        </div>
+
+        <!-- LISTA ZADAŃ -->
+        {% if challenges %}
+            {% for challenge in challenges %}
+            <div class="col-4 col-12-medium">
+                <section class="box feature1">
+                    <header class="second icon solid 
+                        {% if challenge.category == 'Web Exploitation' %}fa-globe
+                        {% elif challenge.category == 'Cryptography' %}fa-lock
+                        {% else %}fa-search{% endif %}">
+                        
+                        <h3>{{ challenge.title }}</h3>
+                        <p><strong>{{ challenge.category }}</strong> | Punkty: {{ challenge.points }}</p>
+                    </header>
+                    <p>{{ challenge.description }}</p>
+                    
+                    {% if username %}
+                        <a href="/challenge/{{ challenge.id }}" class="button alt">Rozwiąż</a>
+                    {% else %}
+                        <p style="color: #aaa; font-size: 0.9em;">Zaloguj się, aby rozwiązać</p>
+                    {% endif %}
+                </section>
+            </div>
+            {% endfor %}
+        {% else %}
+            <div class="col-12" style="text-align: center; padding: 3em;">
+                <p style="color: #aaa;">Brak zadań w tej kategorii.</p>
+            </div>
+        {% endif %}
+    </div>
+</section>
+{% endblock %}

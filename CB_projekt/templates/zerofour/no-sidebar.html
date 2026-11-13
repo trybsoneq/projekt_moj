@@ -1,0 +1,56 @@
+{% extends "zerofour/base.html" %}
+
+{% block banner %}
+<!-- BANER -->
+<div id="banner" style="text-align:center !important;">
+    <h2 style="text-align:center !important;">
+        Witaj w panelu operacyjnym, {{ username }}!
+    </h2>
+    <p style="text-align:center !important; width:100%;">
+        System czeka na Twoje polecenia. Przewiń w dół, wybierz cel i zdobądź kolejną flagę.
+    </p>
+    <br>
+    <div style="text-align:center; margin-top:100px;">
+        <a href="#main-wrapper" class="button large icon solid fa-arrow-down">Dodaj nowe zadania</a>
+    </div>
+</div>
+{% endblock %}
+
+{% block content %}
+<section class="container box" style="max-width: 700px; margin: 0 auto; padding: 3em;">
+    <header class="major" style="text-align: center;">
+        <h2>Dodaj nowe wyzwanie CTF</h2>
+        <p>Wypełnij formularz, aby opublikować zadanie dla graczy.</p>
+    </header>
+
+    <form method="POST" action="/admin/add-challenge" class="admin-form">
+        <div class="row gtr-50">
+            <div class="col-12">
+                <input type="text" name="title" placeholder="Tytuł zadania (np. Podatna wyszukiwarka)" required />
+            </div>
+            <div class="col-12">
+                <textarea name="description" placeholder="Opis zadania i wskazówki dla studenta..." rows="4" required></textarea>
+            </div>
+            <div class="col-6 col-12-small">
+                <select name="category" required>
+                    <option value="" disabled selected>Wybierz kategorię...</option>
+                    <option value="Web Exploitation">Web Exploitation</option>
+                    <option value="Cryptography">Cryptography</option>
+                    <option value="Forensics">Forensics</option>
+                </select>
+            </div>
+            <div class="col-6 col-12-small">
+                <input type="number" name="points" placeholder="Liczba punktów (np. 100)" required />
+            </div>
+            <div class="col-12">
+                <input type="text" name="flag" placeholder="Prawidłowa flaga (np. CTF{twoj_sekret})" required />
+            </div>
+            <div class="col-12" style="text-align: center; margin-top: 2em;">
+                <ul class="actions" style="display: inline-flex; justify-content: center; width: 100%;">
+                    <li><input type="submit" class="button large" value="Opublikuj zadanie" /></li>
+                </ul>
+            </div>
+        </div>
+    </form>
+</section>
+{% endblock %}

@@ -1,0 +1,134 @@
+<!DOCTYPE HTML>
+<html>
+<head>
+    <title>CyberSim</title>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no" />
+    <link rel="stylesheet" href="/assets/css/main.css" />
+</head>
+<body class="homepage is-preload">
+    <div id="page-wrapper">
+        <div id="header-wrapper">
+            <div class="container">
+                <header id="header">
+                    <div class="inner">
+                        <h1>
+                            <a href="/" id="logo">
+                                {% if username %}
+                                    Witaj, {{ username }}!
+                                {% else %}
+                                    CyberSim
+                                {% endif %}
+                            </a>
+                        </h1>
+            
+                        <nav id="nav">
+                            <ul>
+                                <li {% if active_page == 'home' %}class="current_page_item"{% endif %}>
+                                    <a href="/">Home</a>
+                                </li>
+                                <li {% if active_page == 'scoreboard' %}class="current_page_item"{% endif %}>
+                                    <a href="/scoreboard">Scoreboard</a>
+                                </li>
+                                <li {% if active_page == 'rules' %}class="current_page_item"{% endif %}>
+                                    <a href="/rules">Zasady i FAQ</a>
+                                </li>
+                                
+                                {% if username %}
+                                    {% if username == 'admin' %}
+                                        <li {% if active_page == 'admin' %}class="current_page_item"{% endif %}>
+                                            <a href="/admin" style="color: #66b3ff;">Panel Administratora</a>
+                                        </li>
+                                    {% endif %}
+                                    
+                                    <li><a href="/logout" style="color: #ff6666;">Wyloguj się</a></li>
+                                {% else %}
+                                    <li {% if active_page == 'register' %}class="current_page_item"{% endif %}>
+                                        <a href="/register">Zarejestruj się</a>
+                                    </li>
+                                    <li {% if active_page == 'login' %}class="current_page_item"{% endif %}>
+                                        <a href="/login">Zaloguj się</a>
+                                    </li>
+                                {% endif %}
+                            </ul>
+                        </nav>
+                    </div>
+                </header>
+                
+                <!-- BLOK NA BANER -->
+                {% block banner %}
+                {% endblock %}
+                
+            </div>
+        </div>
+
+        <div id="main-wrapper">
+            <div class="wrapper style1">
+                <div class="inner">
+                    {% block content %}
+                    {% endblock %}
+                </div>
+            </div>
+        </div>
+
+        <div id="footer-wrapper">
+            <footer id="footer" class="container">
+                <div class="row">
+                    <div class="col-12">
+                        <!-- FORMULARZ KONTAKTOWY -->
+                        <section class="style1" style="text-align: center;">
+                            <h2>Skontaktuj się z nami</h2>
+                            <p>
+                                Masz pytanie lub potrzebujesz pomocy? <br />
+                                Wypełnij formularz – skontaktujemy się z Tobą tak szybko, jak to możliwe.
+                            </p>
+                        </section>
+
+                        <section>
+                            <form method="post" action="https://formspree.io/f/xrevqrzo">
+                                <div class="row gtr-50">
+                                    <div class="col-6 col-12-small">
+                                        <input type="text" name="name" id="contact-name" placeholder="Imię i nazwisko" required />
+                                    </div>
+                                    <div class="col-6 col-12-small">
+                                        <input type="email" name="email" id="contact-email" placeholder="Email" required />
+                                    </div>
+                                    <div class="col-12">
+                                        <textarea name="message" id="contact-message" placeholder="Wiadomość" rows="4" required></textarea>
+                                    </div>
+                                    <div class="col-12">
+                                        <label style="display: flex; align-items: flex-start; gap: 10px; cursor: pointer; text-align: justify;">
+                                            <input type="checkbox" name="user_acceptance" value="1" required style="width: auto; margin-top: 3px;">
+                                            <span style="font-size: 0.85em; line-height: 1.4; color: #aaa;">Wyrażam zgodę na przetwarzanie danych osobowych w celu przesłania odpowiedzi na mój adres e-mail podany powyżej w formularzu kontaktowym. (Informujemy, że Państwa zgoda może zostać cofnięta w dowolnym momencie przez wysłanie wiadomości e-mail za pomocą niniejszego formularza kontaktowego. Państwa dane nie są przekazywane ani udostępniane osobom trzecim i nie są profilowane).</span>
+                                        </label>
+                                    </div>
+                                    <div class="col-12" style="text-align: center;">
+                                        <ul class="actions" style="display: inline-flex; gap: 1em; margin: 0 auto;">
+                                            <li><input type="submit" class="button alt" value="Wyślij" /></li>
+                                            <li><input type="reset" class="button alt" value="Resetuj" /></li>
+                                        </ul>
+                                    </div>
+                                </div>
+                            </form>
+                        </section>
+                    </div>
+                    <div class="col-12">
+                        <div id="copyright">
+                            <ul class="menu">
+                                <li>&copy; Copyright © 2026 CyberSim. Wszelkie prawa zastrzeżone</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            </footer>
+        </div>
+    </div>
+
+    <script src="/assets/js/jquery.min.js"></script>
+    <script src="/assets/js/jquery.dropotron.min.js"></script>
+    <script src="/assets/js/browser.min.js"></script>
+    <script src="/assets/js/breakpoints.min.js"></script>
+    <script src="/assets/js/util.js"></script>
+    <script src="/assets/js/main.js"></script>
+</body>
+</html>

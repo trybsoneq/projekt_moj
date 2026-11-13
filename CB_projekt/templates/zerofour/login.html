@@ -1,0 +1,39 @@
+{% extends "zerofour/base.html" %}
+
+{% block content %}
+<section class="container box" style="max-width: 500px; margin: 0 auto; padding: 3em;">
+    <header class="major" style="text-align: center;">
+        <h2>Logowanie</h2>
+        <p>Witaj ponownie! Zaloguj się na swoje konto.</p>
+    </header>
+
+    <!-- KOMUNIKATY BŁĘDÓW -->
+    {% if error %}
+    <div style="background: rgba(255,0,0,0.15); border: 1px solid #ff4444; border-radius: 8px; padding: 12px; margin-bottom: 20px; text-align: center;">
+        <p style="color: #ff6666; margin: 0;">{{ error }}</p>
+    </div>
+    {% endif %}
+
+    <form method="POST" action="/login">
+        <div class="row gtr-50">
+            <div class="col-12">
+                <input type="text" name="username" placeholder="Nazwa użytkownika" required />
+            </div>
+            <div class="col-12">
+                <input type="password" name="password" placeholder="Hasło" required />
+            </div>
+            <div class="col-12" style="text-align: center; margin-top: 1.5em;">
+                <ul class="actions" style="display: inline-flex; justify-content: center; width: 100%;">
+                    <li><input type="submit" class="button large" value="Zaloguj się" /></li>
+                </ul>
+            </div>
+        </div>
+    </form>
+
+    <div style="text-align: center; margin-top: 1.5em;">
+        <p style="color: #aaa; font-size: 0.9em;">
+            Nie masz konta? <a href="/register" style="color: #50a1cf;">Zarejestruj się</a>
+        </p>
+    </div>
+</section>
+{% endblock %}
