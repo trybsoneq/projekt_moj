@@ -40,7 +40,10 @@ Nie jest potrzebna nowa migracja bazy danych. Po zalogowaniu na konto administra
 ## Testy
 
 ```powershell
-python -m unittest -v test_auth.py test_docker_manager.py
+python -m unittest -v test_auth.py test_docker_manager.py test_templates.py
 ```
 
 Testy jednostkowe obliczeń CPU i RAM nie wymagają uruchomionego Docker Engine. Odczyt rzeczywistych statystyk, restart i zatrzymanie należy sprawdzić przy działającym Docker Desktop.
+
+
+GitHub Actions automatycznie wykonuje kompilację modułów Python oraz ten zestaw testów dla pushy i pull requestów na gałęziach `main` i `feature/**`.
