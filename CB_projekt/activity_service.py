@@ -6,6 +6,7 @@ from datetime import datetime, timedelta
 from hmac import compare_digest
 
 from sqlalchemy import func
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 import models
@@ -109,6 +110,26 @@ def record_flag_submission(
     try:
         db.commit()
         db.refresh(submission)
+    except IntegrityError:
+        db.rollback()
+        # A concurrent correct submission may have created the unique solve
+        # first. Do not award points twice or leave a partial history row.
+        concurrent_solve = (
+            db.query(models.Solve)
+            .filter(
+                models.Solve.user_id == user.id,
+                models.Solve.challenge_id == challenge.id,
+            )
+            .first()
+        )
+        if concurrent_solve:
+            return {
+                "already_solved": True,
+                "is_correct": True,
+                "points_awarded": 0,
+                "submission": None,
+            }
+        raise
     except Exception:
         db.rollback()
         raise
