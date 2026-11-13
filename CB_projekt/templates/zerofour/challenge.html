@@ -28,16 +28,35 @@
     </div>
 
     <div style="text-align: center; margin: 2em 0;">
-        {% if challenge.external_url %}
-            <!-- Jeśli zadanie ma link zewnętrzny - pokaż przycisk "Otwórz stronę" -->
-            <a href="{{ challenge.external_url }}" target="_blank" class="button large icon solid fa-external-link-alt">
-                Otwórz stronę
-            </a>
+        {% if challenge.docker_template %}
+            <div style="padding: 1.5em; background: rgba(40,145,190,0.08); border: 1px solid rgba(80,161,207,0.45); border-radius: 10px;">
+                <h3>Indywidualne środowisko laboratoryjne</h3>
+                <p style="color:#aaa;">Środowisko jest uruchamiane tylko dla Twojego konta i automatycznie wyłącza się po 30 minutach.</p>
+                {% if current_instance %}
+                    <p style="color:#61d095; font-weight:bold;">Środowisko aktywne</p>
+                    <p>Pozostały czas: <strong id="instance-countdown" data-expires="{{ current_instance.expires_at.isoformat() }}Z">--:--</strong></p>
+                    <a href="{{ current_instance_url }}" target="_blank" rel="noopener noreferrer" class="button large icon solid fa-external-link-alt">Otwórz moje środowisko</a>
+                    <form method="POST" action="/instance/{{ current_instance.id }}/stop" style="margin-top: 1em;">
+                        <button type="submit" class="button alt" onclick="return confirm('Zatrzymać środowisko?')">Zatrzymaj środowisko</button>
+                    </form>
+                {% elif username %}
+                    <form method="POST" action="/challenge/{{ challenge.id }}/instance/start">
+                        <button type="submit" class="button large">Uruchom środowisko (30 min)</button>
+                    </form>
+                {% else %}
+                    <p>Aby uruchomić laboratorium, <a href="/login">zaloguj się</a>.</p>
+                {% endif %}
+                {% if instance_error %}
+                    <p style="color:#ff7777; margin-top:1em;">{{ instance_error }}</p>
+                {% endif %}
+                {% if instance_notice %}
+                    <p style="color:#61d095; margin-top:1em;">Operacja na środowisku została wykonana.</p>
+                {% endif %}
+            </div>
+        {% elif challenge.external_url %}
+            <a href="{{ challenge.external_url }}" target="_blank" rel="noopener noreferrer" class="button large icon solid fa-external-link-alt">Otwórz stronę</a>
         {% else %}
-            <!-- Jeśli nie ma linku - pokaż "Pobierz plik" -->
-            <a href="/download/{{ challenge.id }}" class="button large icon solid fa-download">
-                Pobierz plik
-            </a>
+            <a href="/download/{{ challenge.id }}" class="button large icon solid fa-download">Pobierz plik</a>
         {% endif %}
     </div>
 
@@ -82,5 +101,23 @@
         }
         return true;
     }
+
+    (function startInstanceCountdown() {
+        var timer = document.getElementById('instance-countdown');
+        if (!timer) return;
+        var expiresAt = new Date(timer.dataset.expires).getTime();
+        function update() {
+            var seconds = Math.max(0, Math.floor((expiresAt - Date.now()) / 1000));
+            var minutes = Math.floor(seconds / 60);
+            var rest = seconds % 60;
+            timer.textContent = String(minutes).padStart(2, '0') + ':' + String(rest).padStart(2, '0');
+            if (seconds <= 0) {
+                timer.textContent = '00:00 – środowisko wygasło';
+                window.setTimeout(function () { window.location.reload(); }, 1500);
+            }
+        }
+        update();
+        window.setInterval(update, 1000);
+    })();
 </script>
 {% endblock %}
