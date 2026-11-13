@@ -403,7 +403,17 @@ def show_challenge(request: Request, challenge_id: int, current_user: models.Use
     current_instance_url = instance_url(active_instance) if active_instance else None
     instance_error = request.query_params.get("instance_error")
     instance_notice = request.query_params.get("instance_started") or request.query_params.get("instance_stopped")
-    
+    challenge_attempts = 0
+    if current_user:
+        challenge_attempts = (
+            db.query(models.Submission)
+            .filter(
+                models.Submission.user_id == current_user.id,
+                models.Submission.challenge_id == challenge.id,
+            )
+            .count()
+        )
+
     return templates.TemplateResponse(
         request,
         "zerofour/challenge.html",
@@ -417,6 +427,8 @@ def show_challenge(request: Request, challenge_id: int, current_user: models.Use
             "current_instance_url": current_instance_url,
             "instance_error": instance_error,
             "instance_notice": instance_notice,
+            "challenge_attempts": challenge_attempts,
+            "max_flag_attempts": MAX_FLAG_ATTEMPTS_PER_MINUTE,
             "active_page": "home"
         }
     )
