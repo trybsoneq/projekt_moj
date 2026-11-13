@@ -44,7 +44,7 @@ python migrate_hints.py
 python -m uvicorn main:app --reload
 ```
 
-Migracja uruchamia się również automatycznie przy imporcie `main.py`. Zatrzymaj Uvicorn przed podmianą plików i zachowaj istniejący `ctf_platform.db`.
+Migracja uruchamia się również automatycznie przy imporcie `main.py`. Uruchomiony samodzielnie skrypt `migrate_hints.py` najpierw wykonuje idempotentne migracje Etapów 1–4 (role, Docker i historię prób), a dopiero później przenosi wskazówki. Dzięki temu starsza baza otrzymuje brakujące kolumny, takie jak `challenges.docker_template`, przed odczytem rekordów zadań. Zatrzymaj Uvicorn przed podmianą plików i zachowaj istniejący `ctf_platform.db`.
 
 ## Testy
 
