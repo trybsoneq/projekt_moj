@@ -3,6 +3,7 @@ from sqlalchemy.orm import relationship
 from database import Base
 import datetime
 
+
 class User(Base):
     __tablename__ = "users"
 
@@ -10,7 +11,8 @@ class User(Base):
     username = Column(String, unique=True, index=True, nullable=False)
     password_hash = Column(String, nullable=False)
     score = Column(Integer, default=0)
-    
+    role = Column(String(20), nullable=False, default="user", server_default="user")
+
     solves = relationship("Solve", back_populates="user")
 
 
@@ -26,7 +28,7 @@ class Challenge(Base):
     points = Column(Integer, nullable=False)
     flag = Column(String, nullable=False)
     external_url = Column(String, nullable=True)
-    
+
     solves = relationship("Solve", back_populates="challenge")
 
 
