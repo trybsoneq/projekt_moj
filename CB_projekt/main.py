@@ -26,6 +26,9 @@ from instance_routes import router as instance_router
 from infrastructure_routes import router as infrastructure_router
 from migrate_docker import migrate as migrate_docker
 from migrate_activity import migrate as migrate_activity
+from migrate_hints import migrate as migrate_hints
+from hint_routes import router as hint_router
+from hint_service import HintError, get_hint_view, save_challenge_hints
 from activity_routes import router as activity_router
 from activity_service import (
     MAX_FLAG_ATTEMPTS_PER_MINUTE,
@@ -45,6 +48,7 @@ app = FastAPI()
 app.include_router(instance_router)
 app.include_router(infrastructure_router)
 app.include_router(activity_router)
+app.include_router(hint_router)
 logger = logging.getLogger(__name__)
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -113,6 +117,7 @@ migrate_roles()
 migrate_docker()
 migrate_activity()
 init_database()
+migrate_hints()
 
 
 async def _instance_cleanup_worker():
@@ -279,6 +284,12 @@ def add_challenge(
     description: str = Form(...),
     long_description: str = Form(None),
     hint: str = Form(None),
+    hint_1: str = Form(None),
+    hint_1_penalty: int = Form(0),
+    hint_2: str = Form(None),
+    hint_2_penalty: int = Form(0),
+    hint_3: str = Form(None),
+    hint_3_penalty: int = Form(0),
     category: str = Form(...),
     points: int = Form(...),
     flag: str = Form(...),
@@ -291,11 +302,12 @@ def add_challenge(
     if not is_supported_template(docker_template):
         raise HTTPException(status_code=400, detail="Nieobsługiwany szablon Docker.")
 
+    first_hint = (hint_1 or hint or "").strip()
     new_challenge = models.Challenge(
         title=title,
         description=description,
         long_description=long_description or description,
-        hint=hint,
+        hint=first_hint or None,
         category=category,
         points=points,
         flag=flag,
@@ -303,7 +315,20 @@ def add_challenge(
         docker_template=docker_template
     )
     db.add(new_challenge)
-    db.commit()
+    try:
+        db.flush()
+        save_challenge_hints(db, new_challenge, {
+            1: (first_hint, hint_1_penalty),
+            2: (hint_2, hint_2_penalty),
+            3: (hint_3, hint_3_penalty),
+        })
+        db.commit()
+    except HintError as exc:
+        db.rollback()
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception:
+        db.rollback()
+        raise
     return RedirectResponse(url="/admin", status_code=status.HTTP_302_FOUND)
 
 @app.post("/admin/delete-challenge")
@@ -331,6 +356,12 @@ def edit_challenge(
     description: str = Form(...),
     long_description: str = Form(None),
     hint: str = Form(None),
+    hint_1: str = Form(None),
+    hint_1_penalty: int = Form(0),
+    hint_2: str = Form(None),
+    hint_2_penalty: int = Form(0),
+    hint_3: str = Form(None),
+    hint_3_penalty: int = Form(0),
     category: str = Form(...),
     points: int = Form(...),
     flag: str = Form(...),
@@ -342,18 +373,32 @@ def edit_challenge(
     docker_template = docker_template.strip() or None
     if not is_supported_template(docker_template):
         raise HTTPException(status_code=400, detail="Nieobsługiwany szablon Docker.")
+
     challenge = db.query(models.Challenge).filter(models.Challenge.id == challenge_id).first()
     if challenge:
+        first_hint = (hint_1 or hint or "").strip()
         challenge.title = title
         challenge.description = description
         challenge.long_description = long_description or description
-        challenge.hint = hint
+        challenge.hint = first_hint or None
         challenge.category = category
         challenge.points = points
         challenge.flag = flag
         challenge.docker_template = docker_template
         challenge.external_url = None if docker_template else (external_url.strip() or None)
-        db.commit()
+        try:
+            save_challenge_hints(db, challenge, {
+                1: (first_hint, hint_1_penalty),
+                2: (hint_2, hint_2_penalty),
+                3: (hint_3, hint_3_penalty),
+            })
+            db.commit()
+        except HintError as exc:
+            db.rollback()
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        except Exception:
+            db.rollback()
+            raise
     return RedirectResponse(url="/admin", status_code=status.HTTP_302_FOUND)
 
 @app.get("/scoreboard")
@@ -403,6 +448,9 @@ def show_challenge(request: Request, challenge_id: int, current_user: models.Use
     current_instance_url = instance_url(active_instance) if active_instance else None
     instance_error = request.query_params.get("instance_error")
     instance_notice = request.query_params.get("instance_started") or request.query_params.get("instance_stopped")
+    hint_message = request.query_params.get("hint_notice")
+    hint_error = request.query_params.get("hint_error")
+    hints = get_hint_view(db, challenge, current_user)
     challenge_attempts = 0
     if current_user:
         challenge_attempts = (
@@ -429,6 +477,9 @@ def show_challenge(request: Request, challenge_id: int, current_user: models.Use
             "instance_notice": instance_notice,
             "challenge_attempts": challenge_attempts,
             "max_flag_attempts": MAX_FLAG_ATTEMPTS_PER_MINUTE,
+            "hints": hints,
+            "hint_message": hint_message,
+            "hint_error": hint_error,
             "active_page": "home"
         }
     )
@@ -491,6 +542,9 @@ def _render_challenge_feedback(
             "instance_notice": None,
             "challenge_attempts": challenge_attempts,
             "max_flag_attempts": MAX_FLAG_ATTEMPTS_PER_MINUTE,
+            "hints": get_hint_view(db, challenge, current_user),
+            "hint_message": None,
+            "hint_error": None,
             "active_page": "home",
         },
     )

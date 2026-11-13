@@ -13,19 +13,58 @@
         <p style="margin: 0;">{{ challenge.long_description if challenge.long_description else challenge.description }}</p>
     </div>
 
-    <!-- Przycisk do pokazania wskazowki -->
-    <div style="text-align: center; margin: 1.5em 0;">
-        <button onclick="toggleHint()" class="button alt" style="cursor: pointer;">
-            Pokaż wskazówkę
-        </button>
-    </div>
+    <section id="hintPanel" style="margin:1.5em 0 2em 0; padding:1.5em; border:1px solid rgba(48,129,175,.45); border-radius:10px; background:rgba(0,200,255,.035);">
+        <header style="text-align:center; margin-bottom:1.25em;">
+            <h3 style="margin:0 0 .4em 0;">Podpowiedzi</h3>
+            <p style="margin:0; color:#888;">Możesz odblokowywać kolejne poziomy po kolei. Każdy koszt punktowy naliczany jest tylko raz.</p>
+        </header>
 
-    <!-- Wskazowka (ukryta domyslnie) -->
-    <div id="hintBox" style="display: none; margin: 1.5em 0; padding: 1em; background: rgba(0,200,255,0.05); border-radius: 8px; border: 1px dashed #3081af; text-align: justify; text-justify: inter-word;">
-        <p style="margin: 0; font-size: 0.9em; color: #50a1cf;">
-            <strong>Wskazowka:</strong> {{ challenge.hint if challenge.hint else "Brak wskazowki." }}
-        </p>
-    </div>
+        {% if hint_error %}
+            <div role="alert" style="padding:.9em; margin-bottom:1em; border:1px solid #c65b5b; border-radius:8px; color:#d9534f;">{{ hint_error }}</div>
+        {% endif %}
+        {% if hint_message %}
+            <div role="status" style="padding:.9em; margin-bottom:1em; border:1px solid #369b68; border-radius:8px; color:#26975f;">{{ hint_message }}</div>
+        {% endif %}
+
+        {% if hints %}
+            <div style="display:grid; gap:.85em;">
+                {% for hint in hints %}
+                    <article style="margin:0; padding:1em; border:1px solid #d5dce2; border-radius:8px; background:rgba(255,255,255,.55);">
+                        <div style="display:flex; justify-content:space-between; align-items:center; gap:1em; flex-wrap:wrap;">
+                            <strong>Poziom {{ hint.level }}</strong>
+                            {% if hint.penalty_points == 0 %}
+                                <span style="color:#278c5b; font-weight:bold;">Bezpłatna</span>
+                            {% else %}
+                                <span style="color:#b97718; font-weight:bold;">Koszt: {{ hint.penalty_points }} pkt</span>
+                            {% endif %}
+                        </div>
+
+                        {% if hint.is_unlocked %}
+                            <div style="margin-top:.8em; padding:.9em; border-radius:7px; background:rgba(48,129,175,.08);">
+                                <p style="margin:0; color:#347da6; white-space:pre-wrap;">{{ hint.content }}</p>
+                            </div>
+                            <small style="display:block; margin-top:.6em; color:#777;">
+                                Odblokowano{% if hint.points_deducted %}; odjęto {{ hint.points_deducted }} pkt{% endif %}.
+                            </small>
+                        {% elif not username %}
+                            <p style="margin:.7em 0 0 0;">Aby odblokować podpowiedź, <a href="/login">zaloguj się</a>.</p>
+                        {% elif hint.can_unlock %}
+                            <p style="margin:.7em 0;">Twoje saldo: <strong>{{ user_points }} pkt</strong>.</p>
+                            <form method="POST" action="/challenge/{{ challenge.id }}/hint/{{ hint.id }}/unlock" style="margin:0;">
+                                <button type="submit" class="button alt" style="margin:0;" onclick="return confirm('Odblokować podpowiedź za {{ hint.penalty_points }} pkt?')">
+                                    Odblokuj podpowiedź
+                                </button>
+                            </form>
+                        {% else %}
+                            <p style="margin:.7em 0 0 0; color:#888;">Najpierw odblokuj wcześniejszą podpowiedź.</p>
+                        {% endif %}
+                    </article>
+                {% endfor %}
+            </div>
+        {% else %}
+            <p style="text-align:center; margin:0; color:#888;">Do tego zadania nie dodano jeszcze podpowiedzi.</p>
+        {% endif %}
+    </section>
 
     <div style="text-align: center; margin: 2em 0;">
         {% if challenge.docker_template %}
@@ -88,18 +127,6 @@
 </section>
 
 <script>
-    function toggleHint() {
-        var hintBox = document.getElementById('hintBox');
-        var btn = document.querySelector('button[onclick="toggleHint()"]');
-        if (hintBox.style.display === 'none') {
-            hintBox.style.display = 'block';
-            btn.textContent = 'Ukryj wskazówkę';
-        } else {
-            hintBox.style.display = 'none';
-            btn.textContent = 'Pokaż wskazówkę';
-        }
-    }
-
     function validateFlag() {
         var flagInput = document.getElementById('flagInput');
         if (flagInput.value.trim() === '') {
