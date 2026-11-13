@@ -263,6 +263,25 @@ def start_or_get_instance(db, user: models.User, challenge: models.Challenge):
         proxy.reload()
         logger.info("CTF instance %s: ingress proxy state=%s", instance.id, proxy.status)
 
+        if proxy.status != "running":
+            try:
+                proxy_output = proxy.logs(tail=80, stdout=True, stderr=True)
+                if isinstance(proxy_output, bytes):
+                    proxy_output = proxy_output.decode("utf-8", errors="replace")
+            except Exception as log_exc:
+                proxy_output = f"Nie udało się pobrać logów kontenera proxy: {log_exc}"
+            logger.error(
+                "CTF instance %s: ingress proxy exited before publishing its port. "
+                "container_state=%r\nproxy_logs:\n%s",
+                instance.id,
+                proxy.attrs.get("State"),
+                proxy_output,
+            )
+            raise DockerManagerError(
+                "Kontener bramy Nginx zakończył pracę podczas uruchamiania. "
+                "Dokładna przyczyna jest w terminalu serwera."
+            )
+
         bindings = proxy.attrs.get("NetworkSettings", {}).get("Ports", {})
         host_bindings = bindings.get(f"{PROXY_PORT}/tcp") or []
         if not host_bindings or not host_bindings[0].get("HostPort"):
