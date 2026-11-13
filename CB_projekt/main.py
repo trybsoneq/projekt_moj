@@ -9,6 +9,7 @@ import logging
 
 from sqlalchemy.orm import Session
 from database import engine, Base, get_db, SessionLocal
+from migrate_roles import migrate as migrate_roles
 import models
 
 from passlib.context import CryptContext
@@ -31,13 +32,6 @@ def get_password_hash(password):
 
 def verify_password(plain_password, hashed_password):
     return pwd_context.verify(plain_password, hashed_password)
-
-if not os.path.exists("ctf_platform.db"):
-    Base.metadata.create_all(bind=engine)
-    print("Utworzono nowa baze danych")
-else:
-    print("Baza danych juz istnieje")
-    Base.metadata.create_all(bind=engine)
 
 app = FastAPI()
 app.include_router(instance_router)
@@ -104,6 +98,7 @@ def init_database():
     finally:
         db.close()
 
+migrate_roles()
 migrate_docker()
 init_database()
 
