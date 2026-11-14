@@ -1,7 +1,7 @@
 """User activity profile and administrator submission analytics."""
 from fastapi import APIRouter, Depends, Request
 from sqlalchemy import case, func
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 
 import models
 from database import get_db
@@ -45,6 +45,7 @@ def show_user_profile(
 
     recent_submissions = (
         db.query(models.Submission)
+        .options(joinedload(models.Submission.challenge))
         .filter(models.Submission.user_id == current_user.id)
         .order_by(models.Submission.submitted_at.desc())
         .limit(50)

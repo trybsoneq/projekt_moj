@@ -73,3 +73,77 @@
         height: 5.5em;
     }
 }
+
+
+/* Final-stage usability and responsive hardening. */
+html {
+    scroll-behavior: smooth;
+}
+
+img,
+video,
+iframe {
+    max-width: 100%;
+}
+
+input,
+select,
+textarea,
+button {
+    max-width: 100%;
+}
+
+@media screen and (max-width: 980px) {
+    #main-wrapper .container,
+    #footer-wrapper .container {
+        width: 100%;
+        max-width: 100%;
+        box-sizing: border-box;
+    }
+
+    #main-wrapper .box {
+        padding: 1.25em !important;
+    }
+
+    table {
+        display: block;
+        max-width: 100%;
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    pre,
+    code {
+        overflow-wrap: anywhere;
+        white-space: pre-wrap;
+    }
+
+    form .row > [class*="col-"] {
+        min-width: 0;
+    }
+}
+
+@media screen and (max-width: 480px) {
+    #main-wrapper .box {
+        padding: 1em !important;
+        margin-left: 0 !important;
+        margin-right: 0 !important;
+    }
+
+    input[type="text"],
+    input[type="email"],
+    input[type="password"],
+    input[type="number"],
+    input[type="date"],
+    input[type="datetime-local"],
+    select,
+    textarea {
+        font-size: 16px;
+    }
+
+    .button,
+    button.button {
+        max-width: 100%;
+        white-space: normal;
+    }
+}

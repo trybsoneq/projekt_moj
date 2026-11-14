@@ -79,6 +79,12 @@ class TemplateCompilationTests(unittest.TestCase):
         self.assertIn('href="/profile/analytics"', profile)
         self.assertIn('href="/teams/analytics"', teams)
 
+    def test_base_logout_uses_post_and_csrf_script(self):
+        source = (TEMPLATE_DIR / "zerofour" / "base.html").read_text(encoding="utf-8")
+        self.assertIn('method="post" action="/logout"', source)
+        self.assertIn('ctf_csrf', source)
+        self.assertIn('name="_csrf_token"', source)
+
     def test_base_template_loads_custom_navigation_css(self):
         base_path = TEMPLATE_DIR / "zerofour" / "base.html"
         css_path = TEMPLATE_DIR / "zerofour" / "assets" / "css" / "custom.css"
@@ -87,6 +93,8 @@ class TemplateCompilationTests(unittest.TestCase):
         self.assertIn("/assets/css/custom.css", source)
         self.assertIn("#nav > ul", css)
         self.assertIn("flex-wrap: wrap", css)
+        self.assertIn("@media screen and (max-width: 480px)", css)
+        self.assertIn("overflow-x: auto", css)
 
 
 if __name__ == "__main__":

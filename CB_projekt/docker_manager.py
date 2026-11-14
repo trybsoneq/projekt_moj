@@ -6,16 +6,30 @@ import os
 import uuid
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+import ipaddress
+import re
 from typing import Optional
+from sqlalchemy.orm import joinedload
 
 import models
 from database import SessionLocal
 
 logger = logging.getLogger(__name__)
 BASE_DIR = Path(__file__).resolve().parent
-INSTANCE_TTL_MINUTES = int(os.getenv("CTF_INSTANCE_TTL_MINUTES", "30"))
-MAX_ACTIVE_INSTANCES_PER_USER = int(os.getenv("CTF_MAX_ACTIVE_INSTANCES_PER_USER", "2"))
-CLEANUP_INTERVAL_SECONDS = int(os.getenv("CTF_INSTANCE_CLEANUP_INTERVAL", "30"))
+def _bounded_int_env(name: str, default: int, minimum: int, maximum: int) -> int:
+    raw = os.getenv(name, str(default))
+    try:
+        value = int(raw)
+    except (TypeError, ValueError) as exc:
+        raise RuntimeError(f"Zmienna {name} musi być liczbą całkowitą.") from exc
+    if not minimum <= value <= maximum:
+        raise RuntimeError(f"Zmienna {name} musi mieścić się w zakresie {minimum}–{maximum}.")
+    return value
+
+
+INSTANCE_TTL_MINUTES = _bounded_int_env("CTF_INSTANCE_TTL_MINUTES", 30, 5, 1440)
+MAX_ACTIVE_INSTANCES_PER_USER = _bounded_int_env("CTF_MAX_ACTIVE_INSTANCES_PER_USER", 2, 1, 10)
+CLEANUP_INTERVAL_SECONDS = _bounded_int_env("CTF_INSTANCE_CLEANUP_INTERVAL", 30, 10, 300)
 
 # Only reviewed repository templates can be started. Never accept user-provided
 # image names, build paths, commands, mounts, ports or Docker options.
@@ -59,10 +73,33 @@ def get_active_instance(db, user_id: int, challenge_id: int):
     )
 
 
+def _validated_public_host() -> str:
+    host = os.getenv("CTF_PUBLIC_HOST", "127.0.0.1").strip()
+    if host.startswith("[") and host.endswith("]"):
+        try:
+            ipaddress.IPv6Address(host[1:-1])
+            return host
+        except ValueError as exc:
+            raise DockerManagerError("CTF_PUBLIC_HOST zawiera nieprawidłowy adres IPv6.") from exc
+    try:
+        ipaddress.ip_address(host)
+        return f"[{host}]" if ":" in host else host
+    except ValueError:
+        if (
+            len(host) > 253
+            or not re.fullmatch(r"[A-Za-z0-9.-]+", host)
+            or host.startswith(".")
+            or host.endswith(".")
+            or ".." in host
+        ):
+            raise DockerManagerError("CTF_PUBLIC_HOST zawiera nieprawidłową nazwę hosta.")
+        return host
+
+
 def instance_url(instance: models.ChallengeInstance) -> Optional[str]:
     if not instance or not instance.host_port:
         return None
-    host = os.getenv("CTF_PUBLIC_HOST", "127.0.0.1").strip()
+    host = _validated_public_host()
     # Dynamic published ports do not terminate TLS. Use a reverse proxy for HTTPS.
     return f"http://{host}:{instance.host_port}"
 
@@ -226,11 +263,21 @@ def start_or_get_instance(db, user: models.User, challenge: models.Challenge):
 
         port = int(config["container_port"])
         bind_host = os.getenv("CTF_DOCKER_BIND_HOST", "127.0.0.1").strip()
+        try:
+            bind_address = ipaddress.ip_address(bind_host)
+        except ValueError as exc:
+            raise DockerManagerError("CTF_DOCKER_BIND_HOST musi być adresem IP.") from exc
+        if not bind_address.is_loopback and os.getenv("CTF_ALLOW_REMOTE_DOCKER_BIND", "0") != "1":
+            raise DockerManagerError(
+                "Zdalne wystawienie portów Docker jest domyślnie zablokowane. "
+                "Użyj loopback albo świadomie ustaw CTF_ALLOW_REMOTE_DOCKER_BIND=1."
+            )
         logger.info("CTF instance %s: creating private challenge container", instance.id)
         container = client.containers.create(
             image_name,
             name=f"ctf-lab-{instance.id}-{token}",
             mem_limit="256m",
+            memswap_limit="256m",
             nano_cpus=500_000_000,
             pids_limit=64,
             cap_drop=["ALL"],
@@ -258,6 +305,7 @@ def start_or_get_instance(db, user: models.User, challenge: models.Challenge):
             network=ingress_network.name,
             ports={f"{PROXY_PORT}/tcp": (bind_host,)},
             mem_limit="64m",
+            memswap_limit="64m",
             nano_cpus=250_000_000,
             pids_limit=32,
             cap_drop=["ALL"],
@@ -528,6 +576,10 @@ def get_infrastructure_overview(db, limit: int = 100) -> dict:
     """Return recent instance records enriched with live Docker container metrics."""
     instances = (
         db.query(models.ChallengeInstance)
+        .options(
+            joinedload(models.ChallengeInstance.user),
+            joinedload(models.ChallengeInstance.challenge),
+        )
         .order_by(models.ChallengeInstance.created_at.desc())
         .limit(limit)
         .all()

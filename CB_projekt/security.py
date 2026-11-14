@@ -1,13 +1,12 @@
-"""Uwierzytelnianie i autoryzacja platformy CTF.
-
-Sesja jest podpisywana przez itsdangerous. W ciasteczku przechowujemy wyłącznie
-identyfikator użytkownika, a rolę każdorazowo pobieramy z bazy danych.
-"""
+"""Authentication, session handling and abuse protection for CyberSim."""
 from __future__ import annotations
 
 import os
 import secrets
+import threading
+import time
 import warnings
+from collections import deque
 from typing import Optional
 
 from fastapi import Cookie, Depends, HTTPException, Request, status
@@ -29,6 +28,14 @@ if not SESSION_SECRET:
         "CTF_SECRET_KEY nie jest ustawiony; wygenerowano tymczasowy klucz. "
         "Ustaw własny klucz przed restartem lub wdrożeniem.",
         RuntimeWarning,
+    )
+
+if (
+    os.getenv("CTF_ENV", "development").lower() == "production"
+    and os.getenv("CTF_COOKIE_SECURE", "0") != "1"
+):
+    raise RuntimeError(
+        "W środowisku produkcyjnym ustaw CTF_COOKIE_SECURE=1 i udostępniaj aplikację przez HTTPS."
     )
 
 _serializer = URLSafeTimedSerializer(SESSION_SECRET, salt="ctf-platform-session")
@@ -89,5 +96,67 @@ def clear_session_cookie(response) -> None:
         key=SESSION_COOKIE_NAME,
         path="/",
         httponly=True,
+        secure=os.getenv("CTF_COOKIE_SECURE", "0") == "1",
         samesite="lax",
     )
+
+
+class SlidingWindowRateLimiter:
+    """Small per-process sliding-window limiter for authentication endpoints.
+
+    For deployments with multiple application workers, enforce the same limit
+    at the reverse proxy or use a shared limiter store.
+    """
+
+    def __init__(self, limit: int = 10, window_seconds: int = 900):
+        self.limit = max(1, int(limit))
+        self.window_seconds = max(1, int(window_seconds))
+        self._events: dict[str, deque[float]] = {}
+        self._lock = threading.Lock()
+
+    def check(self, key: str, now: float | None = None) -> int:
+        current = time.monotonic() if now is None else float(now)
+        cutoff = current - self.window_seconds
+        normalized = (key or "unknown")[:160]
+        with self._lock:
+            events = self._events.setdefault(normalized, deque())
+            while events and events[0] <= cutoff:
+                events.popleft()
+            if len(events) >= self.limit:
+                return max(1, int(events[0] + self.window_seconds - current + 0.999))
+            events.append(current)
+            if len(self._events) > 10000:
+                stale_keys = [item for item, values in self._events.items() if not values or values[-1] <= cutoff]
+                for stale_key in stale_keys[:5000]:
+                    self._events.pop(stale_key, None)
+            return 0
+
+    def reset(self, key: str) -> None:
+        normalized = (key or "unknown")[:160]
+        with self._lock:
+            self._events.pop(normalized, None)
+
+
+AUTH_RATE_LIMIT = max(1, int(os.getenv("CTF_AUTH_ATTEMPTS", "10")))
+AUTH_RATE_WINDOW_SECONDS = max(60, int(os.getenv("CTF_AUTH_WINDOW_SECONDS", "900")))
+auth_rate_limiter = SlidingWindowRateLimiter(AUTH_RATE_LIMIT, AUTH_RATE_WINDOW_SECONDS)
+
+
+def client_rate_limit_key(request: Request) -> str:
+    """Use the direct peer address; do not trust spoofable X-Forwarded-For headers."""
+    return request.client.host if request.client and request.client.host else "unknown"
+
+
+def validate_registration(username: str, password: str, confirmation: str) -> str | None:
+    username = (username or "").strip()
+    if not 3 <= len(username) <= 32:
+        return "Nazwa użytkownika musi mieć od 3 do 32 znaków."
+    if not all(character.isalnum() or character in "._-" for character in username):
+        return "Nazwa użytkownika może zawierać tylko litery, cyfry oraz znaki . _ -."
+    if len(password or "") < 10:
+        return "Hasło musi mieć co najmniej 10 znaków."
+    if len((password or "").encode("utf-8")) > 72:
+        return "Hasło jest zbyt długie (maksymalnie 72 bajty w UTF-8)."
+    if password != confirmation:
+        return "Hasła nie są identyczne."
+    return None

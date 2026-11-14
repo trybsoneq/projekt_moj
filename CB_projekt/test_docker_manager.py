@@ -93,6 +93,17 @@ class DockerManagerTests(unittest.TestCase):
         with patch.dict(os.environ, {"CTF_PUBLIC_HOST": "ctf.example.test"}):
             self.assertEqual(instance_url(instance), "http://ctf.example.test:49154")
 
+    def test_instance_url_rejects_invalid_public_host(self):
+        instance = models.ChallengeInstance(host_port=49154)
+        with patch.dict(os.environ, {"CTF_PUBLIC_HOST": "bad host/evil"}):
+            with self.assertRaises(DockerManagerError):
+                instance_url(instance)
+
+    def test_instance_url_formats_ipv6_hosts(self):
+        instance = models.ChallengeInstance(host_port=49154)
+        with patch.dict(os.environ, {"CTF_PUBLIC_HOST": "::1"}):
+            self.assertEqual(instance_url(instance), "http://[::1]:49154")
+
 
     def test_restart_restarts_both_containers_and_preserves_instance(self):
         class FakeContainer:

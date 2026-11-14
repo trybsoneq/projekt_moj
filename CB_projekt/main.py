@@ -2,18 +2,23 @@
 from fastapi import FastAPI, Request, Form, Depends, HTTPException, status
 from fastapi.templating import Jinja2Templates
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import RedirectResponse, FileResponse
+from fastapi.responses import RedirectResponse, FileResponse, JSONResponse
 import os
 import asyncio
 import logging
+from urllib.parse import quote, urlsplit
+from sqlalchemy.exc import IntegrityError
 
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 from database import engine, Base, get_db, SessionLocal
 from migrate_roles import migrate as migrate_roles
 import models
 
 from passlib.context import CryptContext
-from security import get_current_user, require_admin, set_session_cookie, clear_session_cookie
+from security import (
+    get_current_user, require_admin, set_session_cookie, clear_session_cookie,
+    auth_rate_limiter, client_rate_limit_key, validate_registration,
+)
 from docker_manager import (
     CLEANUP_INTERVAL_SECONDS,
     cleanup_expired_instances,
@@ -30,6 +35,7 @@ from migrate_hints import migrate as migrate_hints
 from migrate_achievements import migrate as migrate_achievements
 from migrate_tournaments import migrate as migrate_tournaments
 from migrate_notifications import migrate as migrate_notifications
+from migrate_stage10 import migrate as migrate_stage10
 from hint_routes import router as hint_router
 from hint_service import HintError, get_hint_view, save_challenge_hints
 from activity_routes import router as activity_router
@@ -37,6 +43,7 @@ from tournament_routes import router as tournament_router
 from notification_routes import router as notification_router
 from notification_service import process_due_tournament_notifications
 from analytics_routes import router as analytics_router
+from csrf_middleware import CSRFSecurityMiddleware
 from activity_service import (
     MAX_FLAG_ATTEMPTS_PER_MINUTE,
     SubmissionRateLimitError,
@@ -51,7 +58,8 @@ def get_password_hash(password):
 def verify_password(plain_password, hashed_password):
     return pwd_context.verify(plain_password, hashed_password)
 
-app = FastAPI()
+app = FastAPI(debug=False, docs_url=None, redoc_url=None, openapi_url=None)
+app.add_middleware(CSRFSecurityMiddleware)
 app.include_router(instance_router)
 app.include_router(infrastructure_router)
 app.include_router(activity_router)
@@ -88,6 +96,19 @@ async def load_unread_notification_count(request: Request, call_next):
             finally:
                 db.close()
     return await call_next(request)
+
+@app.exception_handler(Exception)
+async def safe_unhandled_error_handler(request: Request, exc: Exception):
+    logger.exception(
+        "Nieobsłużony wyjątek HTTP podczas obsługi %s %s",
+        request.method,
+        request.url.path,
+    )
+    return JSONResponse(
+        status_code=500,
+        content={"detail": "Wystąpił nieoczekiwany błąd serwera. Spróbuj ponownie później."},
+    )
+
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 TEMPLATES_DIR = os.path.join(BASE_DIR, "templates")
@@ -139,15 +160,15 @@ def init_database():
             ]
             db.add_all(zadania)
             db.commit()
-            print("Dodano zadania.")
+            logger.info("Dodano zadania początkowe.")
         else:
-            print("Zadania juz istnieja - pomijam.")
+            logger.info("Zadania już istnieją — pomijam inicjalizację.")
         
         user_count = db.query(models.User).count()
-        print(f"Liczba uzytkownikow w bazie: {user_count}")
+        logger.info("Liczba użytkowników w bazie: %s", user_count)
         
-    except Exception as e:
-        print(f"Blad inicjalizacji: {e}")
+    except Exception:
+        logger.exception("Błąd inicjalizacji bazy danych.")
     finally:
         db.close()
 
@@ -159,6 +180,7 @@ migrate_hints()
 migrate_achievements()
 migrate_tournaments()
 migrate_notifications()
+migrate_stage10()
 
 
 async def _instance_cleanup_worker():
@@ -269,22 +291,56 @@ def show_register_form(request: Request, current_user: models.User = Depends(get
 
 @app.post("/register")
 def register_user(
+    request: Request,
     username: str = Form(...),
     password: str = Form(...),
-    db: Session = Depends(get_db)
+    confirm_password: str = Form(...),
+    db: Session = Depends(get_db),
 ):
-    if len(password) < 6:
-        return RedirectResponse(url="/register?error=Hasło musi mieć conajmniej 6 znaków!", status_code=status.HTTP_302_FOUND)
-    
+    rate_key = f"register:{client_rate_limit_key(request)}"
+    retry_after = auth_rate_limiter.check(rate_key)
+    if retry_after:
+        raise HTTPException(
+            status_code=429,
+            detail="Zbyt wiele prób rejestracji. Spróbuj ponownie później.",
+            headers={"Retry-After": str(retry_after)},
+        )
+
+    username = (username or "").strip()
+    validation_error = validate_registration(username, password, confirm_password)
+    if validation_error:
+        return RedirectResponse(
+            url="/register?error=" + quote(validation_error),
+            status_code=status.HTTP_302_FOUND,
+        )
+
     existing_user = db.query(models.User).filter(models.User.username == username).first()
     if existing_user:
-        return RedirectResponse(url="/register?error=Nazwa użytkownika jest już zajęta!", status_code=status.HTTP_302_FOUND)
-    
-    new_user = models.User(username=username, password_hash=get_password_hash(password), role="user")
+        return RedirectResponse(
+            url="/register?error=" + quote("Nazwa użytkownika jest już zajęta!"),
+            status_code=status.HTTP_302_FOUND,
+        )
+
+    new_user = models.User(
+        username=username,
+        password_hash=get_password_hash(password),
+        role="user",
+    )
     db.add(new_user)
-    db.commit()
-    
-    return RedirectResponse(url="/login?success=Konto utworzone! Możesz się zalogować.", status_code=status.HTTP_302_FOUND)
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        return RedirectResponse(
+            url="/register?error=" + quote("Nazwa użytkownika jest już zajęta!"),
+            status_code=status.HTTP_302_FOUND,
+        )
+
+    logger.info("Utworzono konto użytkownika: %s", username)
+    return RedirectResponse(
+        url="/login?success=" + quote("Konto utworzone! Możesz się zalogować."),
+        status_code=status.HTTP_302_FOUND,
+    )
 
 @app.get("/login")
 def show_login_form(request: Request, current_user: models.User = Depends(get_current_user), db: Session = Depends(get_db)):
@@ -306,19 +362,41 @@ def show_login_form(request: Request, current_user: models.User = Depends(get_cu
 
 @app.post("/login")
 def login_user(
+    request: Request,
     username: str = Form(...),
     password: str = Form(...),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
+    rate_key = f"login:{client_rate_limit_key(request)}"
+    retry_after = auth_rate_limiter.check(rate_key)
+    if retry_after:
+        raise HTTPException(
+            status_code=429,
+            detail="Zbyt wiele nieudanych prób logowania. Spróbuj ponownie później.",
+            headers={"Retry-After": str(retry_after)},
+        )
+
+    username = (username or "").strip()
     user = db.query(models.User).filter(models.User.username == username).first()
-    if not user or not verify_password(password, user.password_hash):
-        return RedirectResponse(url="/login?error=Nieprawidłowy login lub hasło!", status_code=status.HTTP_302_FOUND)
-    
+    try:
+        valid_password = bool(user and verify_password(password, user.password_hash))
+    except (ValueError, TypeError):
+        valid_password = False
+    if not valid_password:
+        # The message is intentionally identical for unknown users and wrong passwords.
+        return RedirectResponse(
+            url="/login?error=" + quote("Nieprawidłowy login lub hasło!"),
+            status_code=status.HTTP_302_FOUND,
+        )
+
+    auth_rate_limiter.reset(rate_key)
     response = RedirectResponse(url="/", status_code=status.HTTP_302_FOUND)
     set_session_cookie(response, user)
+    logger.info("Użytkownik zalogował się poprawnie: %s", user.username)
     return response
 
-@app.get("/logout")
+
+@app.post("/logout")
 def logout():
     response = RedirectResponse(url="/", status_code=status.HTTP_302_FOUND)
     clear_session_cookie(response)
@@ -327,7 +405,12 @@ def logout():
 @app.get("/admin")
 def show_admin_panel(request: Request, current_admin: models.User = Depends(require_admin), db: Session = Depends(get_db)):
     current_user = current_admin
-    all_challenges = db.query(models.Challenge).all()
+    all_challenges = (
+        db.query(models.Challenge)
+        .options(joinedload(models.Challenge.hints))
+        .order_by(models.Challenge.title.asc())
+        .all()
+    )
     logged_in_user = current_user.username if current_user else None
     user_points = get_user_points(db, current_user)
     
@@ -343,6 +426,48 @@ def show_admin_panel(request: Request, current_admin: models.User = Depends(requ
             "active_page": "admin"
         }
     )
+
+def _validate_challenge_payload(
+    title: str,
+    description: str,
+    category: str,
+    points: int,
+    flag: str,
+    external_url: str | None,
+) -> str | None:
+    title = (title or "").strip()
+    description = (description or "").strip()
+    flag = (flag or "").strip()
+    category = (category or "").strip()
+    if not 3 <= len(title) <= 120:
+        return "Tytuł zadania musi mieć od 3 do 120 znaków."
+    if not 3 <= len(description) <= 2000:
+        return "Opis zadania musi mieć od 3 do 2000 znaków."
+    if category not in {"Web Exploitation", "Cryptography", "Forensics"}:
+        return "Wybierz jedną z dostępnych kategorii zadań."
+    if not 1 <= points <= 5000:
+        return "Liczba punktów musi mieścić się w zakresie 1–5000."
+    if not 3 <= len(flag) <= 255:
+        return "Flaga musi mieć od 3 do 255 znaków."
+    if external_url:
+        value = external_url.strip()
+        try:
+            parsed = urlsplit(value)
+            _ = parsed.port  # Accessing this property validates any explicit port.
+            valid_url = (
+                len(value) <= 500
+                and not any(ord(character) < 32 for character in value)
+                and parsed.scheme.lower() in {"http", "https"}
+                and bool(parsed.hostname)
+                and parsed.username is None
+                and parsed.password is None
+            )
+        except ValueError:
+            valid_url = False
+        if not valid_url:
+            return "Link zewnętrzny musi być poprawnym adresem HTTP lub HTTPS."
+    return None
+
 
 @app.post("/admin/add-challenge")
 def add_challenge(
@@ -367,6 +492,15 @@ def add_challenge(
     docker_template = docker_template.strip() or None
     if not is_supported_template(docker_template):
         raise HTTPException(status_code=400, detail="Nieobsługiwany szablon Docker.")
+    validation_error = _validate_challenge_payload(
+        title, description, category, points, flag,
+        None if docker_template else (external_url or "").strip() or None,
+    )
+    if validation_error:
+        raise HTTPException(status_code=400, detail=validation_error)
+    title = title.strip()
+    description = description.strip()
+    flag = flag.strip()
 
     first_hint = (hint_1 or hint or "").strip()
     new_challenge = models.Challenge(
@@ -377,7 +511,7 @@ def add_challenge(
         category=category,
         points=points,
         flag=flag,
-        external_url=None if docker_template else (external_url.strip() or None),
+        external_url=None if docker_template else ((external_url or "").strip() or None),
         docker_template=docker_template
     )
     db.add(new_challenge)
@@ -405,6 +539,17 @@ def delete_challenge(
 ):
     challenge = db.query(models.Challenge).filter(models.Challenge.id == challenge_id).first()
     if challenge:
+        has_history = any((
+            db.query(models.Solve.id).filter(models.Solve.challenge_id == challenge_id).first(),
+            db.query(models.Submission.id).filter(models.Submission.challenge_id == challenge_id).first(),
+            db.query(models.TournamentChallenge.id).filter(models.TournamentChallenge.challenge_id == challenge_id).first(),
+            db.query(models.TournamentSolve.id).filter(models.TournamentSolve.challenge_id == challenge_id).first(),
+        ))
+        if has_history:
+            raise HTTPException(
+                status_code=409,
+                detail="Nie można usunąć zadania z historią prób, rozwiązań lub turniejów. Edytuj je zamiast usuwać.",
+            )
         active_instances = db.query(models.ChallengeInstance).filter(
             models.ChallengeInstance.challenge_id == challenge_id,
             models.ChallengeInstance.status.in_(["starting", "running", "stop_failed"]),
@@ -439,9 +584,20 @@ def edit_challenge(
     docker_template = docker_template.strip() or None
     if not is_supported_template(docker_template):
         raise HTTPException(status_code=400, detail="Nieobsługiwany szablon Docker.")
+    validation_error = _validate_challenge_payload(
+        title, description, category, points, flag,
+        None if docker_template else (external_url or "").strip() or None,
+    )
+    if validation_error:
+        raise HTTPException(status_code=400, detail=validation_error)
 
     challenge = db.query(models.Challenge).filter(models.Challenge.id == challenge_id).first()
+    if challenge is None:
+        raise HTTPException(status_code=404, detail="Zadanie nie istnieje.")
     if challenge:
+        title = title.strip()
+        description = description.strip()
+        flag = flag.strip()
         first_hint = (hint_1 or hint or "").strip()
         challenge.title = title
         challenge.description = description
@@ -469,7 +625,12 @@ def edit_challenge(
 
 @app.get("/scoreboard")
 def show_scoreboard(request: Request, current_user: models.User = Depends(get_current_user), db: Session = Depends(get_db)):
-    users = db.query(models.User).order_by(models.User.score.desc()).all()
+    users = (
+        db.query(models.User)
+        .order_by(models.User.score.desc(), models.User.username.asc())
+        .limit(1000)
+        .all()
+    )
     logged_in_user = current_user.username if current_user else None
     user_points = get_user_points(db, current_user)
     

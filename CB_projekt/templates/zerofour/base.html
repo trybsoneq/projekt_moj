@@ -69,7 +69,11 @@
                                     <li {% if active_page == 'profile' %}class="current_page_item"{% endif %}>
                                         <a href="/profile">Mój profil</a>
                                     </li>
-                                    <li><a href="/logout" style="color: #ff6666;">Wyloguj się</a></li>
+                                    <li>
+                                        <form method="post" action="/logout" style="display:inline; margin:0;">
+                                            <button type="submit" style="background:none; border:0; color:#ff6666; padding:.48em .7em; cursor:pointer; font:inherit;">Wyloguj się</button>
+                                        </form>
+                                    </li>
                                 {% else %}
                                     <li {% if active_page == 'register' %}class="current_page_item"{% endif %}>
                                         <a href="/register">Zarejestruj się</a>
@@ -158,5 +162,46 @@
     <script src="/assets/js/breakpoints.min.js"></script>
     <script src="/assets/js/util.js"></script>
     <script src="/assets/js/main.js"></script>
+    <script>
+        // Add a signed double-submit CSRF value to every same-origin POST form.
+        (function () {
+            function csrfCookie() {
+                var match = document.cookie.match(/(?:^|;\\s*)ctf_csrf=([^;]+)/);
+                return match ? match[1] : "";
+            }
+            function protectForm(form) {
+                if ((form.getAttribute("method") || "get").toLowerCase() !== "post") return;
+                try {
+                    var action = new URL(form.getAttribute("action") || window.location.href, window.location.href);
+                    if (action.origin !== window.location.origin) return;
+                } catch (_) { return; }
+                var value = csrfCookie();
+                if (!value) return;
+                var field = form.querySelector('input[name="_csrf_token"]');
+                if (!field) {
+                    field = document.createElement("input");
+                    field.type = "hidden";
+                    field.name = "_csrf_token";
+                    form.appendChild(field);
+                }
+                field.value = value;
+            }
+            document.querySelectorAll("form").forEach(protectForm);
+            document.addEventListener("submit", function (event) {
+                if (event.target && event.target.tagName === "FORM") protectForm(event.target);
+            }, true);
+            if (window.MutationObserver) {
+                new MutationObserver(function (records) {
+                    records.forEach(function (record) {
+                        record.addedNodes.forEach(function (node) {
+                            if (node.nodeType !== 1) return;
+                            if (node.tagName === "FORM") protectForm(node);
+                            if (node.querySelectorAll) node.querySelectorAll("form").forEach(protectForm);
+                        });
+                    });
+                }).observe(document.body, { childList: true, subtree: true });
+            }
+        })();
+    </script>
 </body>
 </html>

@@ -23,13 +23,13 @@
     <form method="POST" action="/register" id="registerForm">
         <div class="row gtr-50">
             <div class="col-12">
-                <input type="text" name="username" id="username" placeholder="Nazwa użytkownika" required />
+                <input type="text" name="username" id="username" placeholder="Nazwa użytkownika (3–32 znaki)" minlength="3" maxlength="32" autocomplete="username" required />
             </div>
             <div class="col-12">
-                <input type="password" name="password" id="password" placeholder="Hasło" required />
+                <input type="password" name="password" id="password" placeholder="Hasło (minimum 10 znaków)" minlength="10" maxlength="72" autocomplete="new-password" required />
             </div>
             <div class="col-12">
-                <input type="password" name="confirm_password" id="confirm_password" placeholder="Potwierdź hasło" required />
+                <input type="password" name="confirm_password" id="confirm_password" placeholder="Potwierdź hasło" minlength="10" maxlength="72" autocomplete="new-password" required />
             </div>
             <div class="col-12" style="text-align: center; margin-top: 1.5em;">
                 <ul class="actions" style="display: inline-flex; justify-content: center; width: 100%;">

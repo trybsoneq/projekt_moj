@@ -36,4 +36,9 @@ jobs:
         run: python -m compileall -q .
 
       - name: Run unit tests
-        run: python -m unittest -v test_auth.py test_docker_manager.py test_activity.py test_hints.py test_migrate_hints.py test_achievements.py test_tournaments.py test_notifications.py test_analytics.py test_templates.py
+        run: python -m unittest -v test_auth.py test_docker_manager.py test_activity.py test_hints.py test_migrate_hints.py test_achievements.py test_tournaments.py test_notifications.py test_analytics.py test_security_hardening.py test_templates.py
+
+      - name: Audit Python dependencies
+        run: |
+          python -m pip install pip-audit
+          pip-audit -r requirements.txt

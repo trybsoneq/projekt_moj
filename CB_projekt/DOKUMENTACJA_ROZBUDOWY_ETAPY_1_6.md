@@ -127,3 +127,8 @@ Dodano `analytics_service.py` i `analytics_routes.py`, które prezentują statys
 Eksport CSV jest dostępny dla raportów administratora, gracza i drużyny. Eksport PDF jest generowany przez ReportLab. CSV neutralizuje komórki rozpoczynające się od znaków interpretowanych przez arkusze jako formuły. Statystyki są odczytowe i nie zmieniają punktów, XP ani danych historycznych. Filtry czasu raportów administratora używają dat UTC i końcowych dat włącznie.
 
 Nowe pliki: `analytics_service.py`, `analytics_routes.py`, `analytics_export.py`, `test_analytics.py` oraz szablony `admin_analytics.html`, `player_analytics.html`, `team_analytics.html`. Dodano zależność `reportlab`.
+
+
+## Etap 10 – bezpieczeństwo, stabilność i finalizacja
+
+Dodano ochronę CSRF dla żądań zmieniających stan, nagłówki bezpieczeństwa przeglądarki, ograniczenie prób logowania/rejestracji, silniejszą walidację danych i hasła, wylogowanie metodą POST oraz bezpieczną obsługę błędów. Zaostrzono konfigurację Docker (domyślnie loopback, limity pamięci/swap/CPU/PID, walidacja hosta) i dodano indeksy SQLite. Poprawiono ładowanie relacji i responsywność. Baza platformy i bytecode zostały usunięte z repozytorium, a Git ignoruje lokalne dane. Testy etapu znajdują się w `test_security_hardening.py`; workflow CI uruchamia także `pip-audit`.

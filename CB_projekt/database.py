@@ -2,7 +2,7 @@
 import os
 from pathlib import Path
 
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, event
 from sqlalchemy.engine import URL
 from sqlalchemy.orm import declarative_base, sessionmaker
 
@@ -21,8 +21,20 @@ SQLALCHEMY_DATABASE_URL = URL.create(
 
 engine = create_engine(
     SQLALCHEMY_DATABASE_URL,
-    connect_args={"check_same_thread": False},
+    connect_args={"check_same_thread": False, "timeout": 30},
 )
+
+
+@event.listens_for(engine, "connect")
+def configure_sqlite_connection(connection, _record):
+    """Enforce foreign keys and avoid immediate 'database is locked' failures."""
+    cursor = connection.cursor()
+    try:
+        cursor.execute("PRAGMA foreign_keys=ON")
+        cursor.execute("PRAGMA busy_timeout=5000")
+    finally:
+        cursor.close()
+
 
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()

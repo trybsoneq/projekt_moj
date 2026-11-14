@@ -22,6 +22,13 @@ def main() -> None:
     confirm = getpass.getpass("Powtórz hasło: ")
     if len(password) < 12:
         raise SystemExit("Hasło musi mieć co najmniej 12 znaków.")
+    if len(password.encode("utf-8")) > 72:
+        raise SystemExit("Hasło jest zbyt długie (maksymalnie 72 bajty w UTF-8).")
+    if not 3 <= len(username) <= 32 or not all(
+        character.isalnum() or character in "._-" for character in username
+    ):
+        raise SystemExit("Nazwa administratora musi mieć 3–32 znaki: litery, cyfry, . _ -.")
+
     if password != confirm:
         raise SystemExit("Hasła nie są identyczne.")
 
