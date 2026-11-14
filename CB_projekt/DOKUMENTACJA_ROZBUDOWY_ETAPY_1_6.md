@@ -118,3 +118,12 @@ Powiadomienia są wyzwalane przez zaproszenia do drużyn, zaakceptowanie zaprosz
 Administrator ma stronę `/admin/announcements`, gdzie publikuje komunikaty dla użytkowników i archiwizuje wcześniejsze ogłoszenia. Do komunikatów nie jest wymagany e-mail ani zewnętrzny dostawca.
 
 Nowe szablony: `notifications.html` i `admin_announcements.html`. Testy modułu znajdują się w `test_notifications.py`.
+
+
+## Etap 9 – analityka i raportowanie
+
+Dodano `analytics_service.py` i `analytics_routes.py`, które prezentują statystyki platformy administratorowi, graczowi i drużynie. Panel `/admin/analytics` obsługuje filtry dat oraz wskaźniki użytkowników, zadań, prób i rozwiązań, popularność kategorii, wyniki zadań, statystyki drużyn oraz turniejów. Profil `/profile/analytics` pokazuje indywidualną aktywność, skuteczność, postęp kategorii i historię turniejową. Strona `/teams/analytics` prezentuje aktywność członków i punkty turniejowe drużyny.
+
+Eksport CSV jest dostępny dla raportów administratora, gracza i drużyny. Eksport PDF jest generowany przez ReportLab. CSV neutralizuje komórki rozpoczynające się od znaków interpretowanych przez arkusze jako formuły. Statystyki są odczytowe i nie zmieniają punktów, XP ani danych historycznych. Filtry czasu raportów administratora używają dat UTC i końcowych dat włącznie.
+
+Nowe pliki: `analytics_service.py`, `analytics_routes.py`, `analytics_export.py`, `test_analytics.py` oraz szablony `admin_analytics.html`, `player_analytics.html`, `team_analytics.html`. Dodano zależność `reportlab`.

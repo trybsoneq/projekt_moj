@@ -62,10 +62,22 @@ class TemplateCompilationTests(unittest.TestCase):
         self.environment.get_template("zerofour/notifications.html")
         self.environment.get_template("zerofour/admin_announcements.html")
 
+    def test_analytics_templates_compile(self):
+        self.environment.get_template("zerofour/admin_analytics.html")
+        self.environment.get_template("zerofour/player_analytics.html")
+        self.environment.get_template("zerofour/team_analytics.html")
+
     def test_base_contains_notification_navigation(self):
         source = (TEMPLATE_DIR / "zerofour" / "base.html").read_text(encoding="utf-8")
         self.assertIn('href="/notifications"', source)
         self.assertIn('href="/admin/announcements"', source)
+        self.assertIn('href="/admin/analytics"', source)
+
+    def test_profile_and_team_templates_link_to_analytics(self):
+        profile = (TEMPLATE_DIR / "zerofour" / "profile.html").read_text(encoding="utf-8")
+        teams = (TEMPLATE_DIR / "zerofour" / "teams.html").read_text(encoding="utf-8")
+        self.assertIn('href="/profile/analytics"', profile)
+        self.assertIn('href="/teams/analytics"', teams)
 
     def test_base_template_loads_custom_navigation_css(self):
         base_path = TEMPLATE_DIR / "zerofour" / "base.html"

@@ -1,0 +1,159 @@
+{% extends "zerofour/base.html" %}
+
+{% block banner %}
+<div id="banner" style="text-align:center;">
+    <h2>Analityka platformy</h2>
+    <p>Statystyki użytkowników, aktywności, zadań, drużyn i turniejów CyberSim.</p>
+</div>
+{% endblock %}
+
+{% block content %}
+<section class="container box" style="max-width:1250px; margin:0 auto 2em; padding:2em;">
+    <form method="get" action="/admin/analytics" style="display:flex; align-items:end; gap:1em; flex-wrap:wrap; padding:1em; border:1px solid #444; border-radius:10px; margin-bottom:1.5em;">
+        <div style="flex:1; min-width:180px;">
+            <label for="date-from">Od (włącznie)</label>
+            <input id="date-from" type="date" name="date_from" value="{{ analytics.date_from }}">
+        </div>
+        <div style="flex:1; min-width:180px;">
+            <label for="date-to">Do (włącznie)</label>
+            <input id="date-to" type="date" name="date_to" value="{{ analytics.date_to }}">
+        </div>
+        <button type="submit" class="button">Zastosuj filtr</button>
+        <a href="/admin/analytics" class="button alt">Wyczyść</a>
+    </form>
+
+    <div style="display:flex; gap:.6em; flex-wrap:wrap; justify-content:flex-end; margin-bottom:1.5em;">
+        <a class="button alt" href="/admin/analytics/export.csv?kind=summary&date_from={{ analytics.date_from }}&date_to={{ analytics.date_to }}">CSV – podsumowanie</a>
+        <a class="button alt" href="/admin/analytics/export.csv?kind=challenges&date_from={{ analytics.date_from }}&date_to={{ analytics.date_to }}">CSV – zadania</a>
+        <a class="button alt" href="/admin/analytics/export.pdf?date_from={{ analytics.date_from }}&date_to={{ analytics.date_to }}">Pobierz raport PDF</a>
+    </div>
+
+    <header class="major">
+        <h2>Podsumowanie platformy</h2>
+        <p>Aktywność i próby uwzględniają wybrany okres. Liczba kont, zadań i drużyn jest stanem bieżącym.</p>
+    </header>
+    <div class="row gtr-50" style="margin-bottom:2em;">
+        {% for item in [
+            ("Użytkownicy", analytics.total_users, "accounts"),
+            ("Zadania", analytics.total_challenges, "challenges"),
+            ("Aktywni gracze", analytics.active_users, "users"),
+            ("Rozwiązania", analytics.solves, "solves"),
+            ("Wszystkie próby", analytics.attempts, "attempts"),
+            ("Skuteczność", analytics.success_rate|string ~ "%", "rate"),
+            ("Drużyny", analytics.total_teams, "teams"),
+            ("Turnieje", analytics.total_tournaments, "events")
+        ] %}
+        <div class="col-3 col-6-medium col-12-small">
+            <div style="padding:1.15em; border:1px solid #444; border-radius:10px; text-align:center; height:100%;">
+                <div style="color:#aaa;">{{ item[0] }}</div>
+                <strong style="display:block; font-size:2em; margin-top:.2em;">{{ item[1] }}</strong>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+
+    <header class="major">
+        <h2>Aktywność w czasie</h2>
+        <p>Liczba prób dziennie; daty prezentowane w UTC.</p>
+    </header>
+    {% if analytics.daily %}
+    <div style="display:flex; align-items:end; gap:8px; min-height:190px; overflow-x:auto; padding:1em 0; border-bottom:1px solid #555;">
+        {% for day in analytics.daily %}
+        <div title="{{ day.date }}: {{ day.attempts }} prób" style="min-width:34px; flex:1; display:flex; flex-direction:column; justify-content:end; align-items:center; gap:.4em; height:170px;">
+            <small style="color:#aaa;">{{ day.attempts }}</small>
+            <div style="width:70%; min-height:3px; height:{{ (day.attempts / analytics.max_daily_attempts * 115) if analytics.max_daily_attempts else 3 }}px; background:#3298cf; border-radius:5px 5px 0 0;"></div>
+            <small style="color:#888; writing-mode:vertical-rl; transform:rotate(180deg);">{{ day.date[5:] }}</small>
+        </div>
+        {% endfor %}
+    </div>
+    {% else %}
+    <p style="color:#aaa;">Brak zarejestrowanej aktywności w tym okresie.</p>
+    {% endif %}
+
+    <header class="major" style="margin-top:2em;">
+        <h2>Popularność kategorii</h2>
+        <p>Skuteczność liczona jako poprawne przesłania flag w stosunku do wszystkich prób.</p>
+    </header>
+    {% for row in analytics.categories %}
+    <div style="margin:1em 0;">
+        <div style="display:flex; justify-content:space-between; gap:1em; flex-wrap:wrap;">
+            <strong>{{ row.category }}</strong>
+            <small style="color:#aaa;">{{ row.attempts }} prób · {{ row.success_rate }}% skuteczności · {{ row.solvers }} rozwiązujących</small>
+        </div>
+        <div style="height:10px; background:#333; border-radius:20px; overflow:hidden; margin-top:.45em;">
+            <div style="height:10px; width:{{ (row.attempts / analytics.max_category_attempts * 100) if analytics.max_category_attempts else 0 }}%; background:#3298cf;"></div>
+        </div>
+    </div>
+    {% else %}
+    <p style="color:#aaa;">Brak prób dla kategorii w wybranym okresie.</p>
+    {% endfor %}
+
+    <header class="major" style="margin-top:2em;">
+        <h2>Statystyki zadań</h2>
+    </header>
+    <div style="overflow-x:auto;">
+        <table style="width:100%; min-width:850px; border-collapse:collapse;">
+            <thead><tr style="text-align:left; border-bottom:2px solid #555;">
+                <th style="padding:.7em;">Zadanie</th><th style="padding:.7em;">Kategoria</th><th style="padding:.7em;">Próby</th>
+                <th style="padding:.7em;">Poprawne</th><th style="padding:.7em;">Niepoprawne</th><th style="padding:.7em;">Rozwiązujący</th><th style="padding:.7em;">Skuteczność</th>
+            </tr></thead>
+            <tbody>
+            {% for row in analytics.challenges %}
+            <tr style="border-bottom:1px solid #444;">
+                <td style="padding:.7em;">{{ row.title }}</td><td style="padding:.7em;">{{ row.category }}</td>
+                <td style="padding:.7em;">{{ row.attempts }}</td><td style="padding:.7em; color:#36b878;">{{ row.correct_attempts }}</td>
+                <td style="padding:.7em; color:#e06b6b;">{{ row.incorrect_attempts }}</td><td style="padding:.7em;">{{ row.solves }}</td><td style="padding:.7em;">{{ row.success_rate }}%</td>
+            </tr>
+            {% else %}
+            <tr><td colspan="7" style="padding:.8em; color:#aaa;">Brak zadań.</td></tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <header class="major" style="margin-top:2em;">
+        <h2>Najwyżej sklasyfikowani użytkownicy</h2>
+        <p>Punkty i XP to wartości bieżące, próby i rozwiązania dotyczą wybranego okresu.</p>
+    </header>
+    <div style="overflow-x:auto;">
+        <table style="width:100%; min-width:700px; border-collapse:collapse;">
+            <thead><tr style="text-align:left; border-bottom:2px solid #555;"><th style="padding:.7em;">Gracz</th><th style="padding:.7em;">Punkty</th><th style="padding:.7em;">XP</th><th style="padding:.7em;">Próby</th><th style="padding:.7em;">Rozwiązania</th><th style="padding:.7em;">Skuteczność</th></tr></thead>
+            <tbody>
+            {% for row in analytics.top_users %}
+            <tr style="border-bottom:1px solid #444;"><td style="padding:.7em;">{{ row.username }}</td><td style="padding:.7em;">{{ row.score }}</td><td style="padding:.7em;">{{ row.xp }}</td><td style="padding:.7em;">{{ row.attempts }}</td><td style="padding:.7em;">{{ row.solves }}</td><td style="padding:.7em;">{{ row.accuracy }}%</td></tr>
+            {% else %}
+            <tr><td colspan="6" style="padding:.8em; color:#aaa;">Brak użytkowników.</td></tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <header class="major" style="margin-top:2em;"><h2>Statystyki drużyn</h2></header>
+    <div style="overflow-x:auto;">
+        <table style="width:100%; min-width:600px; border-collapse:collapse;">
+            <thead><tr style="text-align:left; border-bottom:2px solid #555;"><th style="padding:.7em;">Drużyna</th><th style="padding:.7em;">Członkowie</th><th style="padding:.7em;">Turnieje</th><th style="padding:.7em;">Rozwiązania turniejowe</th><th style="padding:.7em;">Punkty turniejowe</th></tr></thead>
+            <tbody>
+            {% for row in analytics.teams %}
+            <tr style="border-bottom:1px solid #444;"><td style="padding:.7em;">{{ row.name }}</td><td style="padding:.7em;">{{ row.members }}</td><td style="padding:.7em;">{{ row.tournaments }}</td><td style="padding:.7em;">{{ row.solve_events }}</td><td style="padding:.7em;">{{ row.points }}</td></tr>
+            {% else %}
+            <tr><td colspan="5" style="padding:.8em; color:#aaa;">Brak drużyn.</td></tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <header class="major" style="margin-top:2em;"><h2>Turnieje</h2></header>
+    <div style="overflow-x:auto;">
+        <table style="width:100%; min-width:650px; border-collapse:collapse;">
+            <thead><tr style="text-align:left; border-bottom:2px solid #555;"><th style="padding:.7em;">Turniej</th><th style="padding:.7em;">Tryb</th><th style="padding:.7em;">Status</th><th style="padding:.7em;">Start UTC</th><th style="padding:.7em;">Uczestnicy</th><th style="padding:.7em;">Punkty</th></tr></thead>
+            <tbody>
+            {% for row in analytics.tournaments %}
+            <tr style="border-bottom:1px solid #444;"><td style="padding:.7em;">{{ row.title }}</td><td style="padding:.7em;">{{ "Drużynowy" if row.type == "team" else "Indywidualny" }}</td><td style="padding:.7em;">{{ row.status }}</td><td style="padding:.7em;">{{ row.starts_at.strftime("%Y-%m-%d %H:%M") }}</td><td style="padding:.7em;">{{ row.participants }}</td><td style="padding:.7em;">{{ row.points }}</td></tr>
+            {% else %}
+            <tr><td colspan="6" style="padding:.8em; color:#aaa;">Brak turniejów w wybranym okresie.</td></tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</section>
+{% endblock %}

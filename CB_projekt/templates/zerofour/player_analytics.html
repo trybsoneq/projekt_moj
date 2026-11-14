@@ -1,0 +1,65 @@
+{% extends "zerofour/base.html" %}
+
+{% block banner %}
+<div id="banner" style="text-align:center;">
+    <h2>Moje statystyki</h2>
+    <p>Analiza Twojej aktywności, rozwiązań, kategorii i wyników turniejowych.</p>
+</div>
+{% endblock %}
+
+{% block content %}
+<section class="container box" style="max-width:1100px; margin:0 auto 2em; padding:2em;">
+    <div style="display:flex; justify-content:flex-end; gap:.6em; flex-wrap:wrap; margin-bottom:1.5em;">
+        <a href="/profile/analytics/export.csv" class="button alt">Eksport CSV</a>
+        <a href="/profile/analytics/export.pdf" class="button">Pobierz PDF</a>
+    </div>
+    <div class="row gtr-50">
+        {% for label,value in [
+            ("Punkty globalne",analytics.score),("Rozwiązane zadania",analytics.solves),
+            ("Wszystkie próby",analytics.attempts),("Skuteczność",analytics.accuracy|string ~ "%"),
+            ("XP",analytics.xp),("Poziom",analytics.level),
+            ("Aktualna seria",analytics.current_streak),("Najdłuższa seria",analytics.longest_streak)
+        ] %}
+        <div class="col-3 col-6-medium col-12-small">
+            <div style="padding:1.1em; border:1px solid #444; border-radius:10px; text-align:center; height:100%;">
+                <div style="color:#aaa;">{{ label }}</div><strong style="display:block; font-size:2em; margin-top:.2em;">{{ value }}</strong>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+
+    <header class="major" style="margin-top:2em;"><h2>Aktywność – ostatnie 30 dni</h2><p>Liczba prób przesłania flag i poprawne odpowiedzi.</p></header>
+    {% if analytics.daily %}
+    <div style="display:flex; align-items:end; gap:6px; min-height:180px; overflow-x:auto; padding:1em 0; border-bottom:1px solid #555;">
+        {% for day in analytics.daily %}
+        <div title="{{ day.date }}: {{ day.attempts }} prób, {{ day.correct }} poprawnych" style="min-width:27px; flex:1; display:flex; flex-direction:column; align-items:center; justify-content:end; gap:.3em; height:160px;">
+            <small style="color:#aaa;">{{ day.attempts }}</small>
+            <div style="width:75%; height:{{ (day.attempts / analytics.max_daily_attempts * 105) if analytics.max_daily_attempts else 3 }}px; min-height:3px; background:#3298cf; border-radius:4px 4px 0 0;"></div>
+            <small style="color:#888; font-size:.65em; writing-mode:vertical-rl; transform:rotate(180deg);">{{ day.date[5:] }}</small>
+        </div>
+        {% endfor %}
+    </div>
+    {% else %}<p style="color:#aaa;">Brak aktywności w ostatnich 30 dniach.</p>{% endif %}
+
+    <header class="major" style="margin-top:2em;"><h2>Postęp według kategorii</h2></header>
+    {% for row in analytics.categories %}
+    <div style="margin:1em 0;">
+        <div style="display:flex; justify-content:space-between; gap:1em;"><strong>{{ row.category }}</strong><small style="color:#aaa;">{{ row.solves }} / {{ row.total }} · {{ row.progress }}%</small></div>
+        <div style="height:11px; background:#333; border-radius:20px; overflow:hidden; margin-top:.4em;">
+            <div style="height:11px; width:{{ row.progress }}%; background:#3298cf;"></div>
+        </div>
+    </div>
+    {% else %}<p style="color:#aaa;">Brak kategorii.</p>{% endfor %}
+
+    <header class="major" style="margin-top:2em;"><h2>Historia turniejów</h2></header>
+    <div style="overflow-x:auto;">
+        <table style="width:100%; min-width:550px; border-collapse:collapse;">
+            <thead><tr style="text-align:left; border-bottom:2px solid #555;"><th style="padding:.7em;">Turniej</th><th style="padding:.7em;">Status</th><th style="padding:.7em;">Rozwiązania</th><th style="padding:.7em;">Punkty</th></tr></thead>
+            <tbody>{% for row in analytics.tournaments %}
+            <tr style="border-bottom:1px solid #444;"><td style="padding:.7em;"><a href="/tournaments/{{ row.id }}">{{ row.title }}</a></td><td style="padding:.7em;">{{ row.status }}</td><td style="padding:.7em;">{{ row.solves }}</td><td style="padding:.7em;">{{ row.points }}</td></tr>
+            {% else %}<tr><td colspan="4" style="padding:.8em; color:#aaa;">Nie brałeś jeszcze udziału w turniejach.</td></tr>{% endfor %}</tbody>
+        </table>
+    </div>
+    <div style="text-align:center; margin-top:2em;"><a href="/profile" class="button alt">Wróć do profilu</a></div>
+</section>
+{% endblock %}

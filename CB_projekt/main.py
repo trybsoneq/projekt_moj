@@ -36,6 +36,7 @@ from activity_routes import router as activity_router
 from tournament_routes import router as tournament_router
 from notification_routes import router as notification_router
 from notification_service import process_due_tournament_notifications
+from analytics_routes import router as analytics_router
 from activity_service import (
     MAX_FLAG_ATTEMPTS_PER_MINUTE,
     SubmissionRateLimitError,
@@ -57,6 +58,7 @@ app.include_router(activity_router)
 app.include_router(hint_router)
 app.include_router(tournament_router)
 app.include_router(notification_router)
+app.include_router(analytics_router)
 logger = logging.getLogger(__name__)
 
 NOTIFICATION_POLL_INTERVAL_SECONDS = 60

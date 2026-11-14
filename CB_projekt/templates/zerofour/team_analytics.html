@@ -1,0 +1,50 @@
+{% extends "zerofour/base.html" %}
+
+{% block banner %}
+<div id="banner" style="text-align:center;">
+    <h2>Statystyki drużyny: {{ analytics.team.name }}</h2>
+    <p>Aktywność składu i wyniki w turniejach.</p>
+</div>
+{% endblock %}
+
+{% block content %}
+<section class="container box" style="max-width:1050px; margin:0 auto 2em; padding:2em;">
+    <div style="display:flex; justify-content:flex-end; gap:.6em; flex-wrap:wrap; margin-bottom:1.5em;">
+        <a href="/teams/analytics/export.csv" class="button alt">Eksport CSV</a>
+        <a href="/teams/analytics/export.pdf" class="button">Pobierz PDF</a>
+    </div>
+    <div class="row gtr-50">
+        {% for label,value in [
+            ("Członkowie",analytics.member_count),("Próby członków",analytics.total_attempts),
+            ("Rozwiązania członków",analytics.total_solves),("Punkty turniejowe",analytics.tournament_points)
+        ] %}
+        <div class="col-3 col-6-medium col-12-small">
+            <div style="padding:1.2em; border:1px solid #444; border-radius:10px; text-align:center; height:100%;">
+                <div style="color:#aaa;">{{ label }}</div><strong style="font-size:2em; display:block; margin-top:.2em;">{{ value }}</strong>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+
+    <header class="major" style="margin-top:2em;"><h2>Aktywność członków</h2><p>Punkty globalne należą do indywidualnych graczy; ta tabela służy do porównania wkładu w aktywność zespołu.</p></header>
+    <div style="overflow-x:auto;">
+        <table style="width:100%; min-width:760px; border-collapse:collapse;">
+            <thead><tr style="text-align:left; border-bottom:2px solid #555;"><th style="padding:.7em;">Członek</th><th style="padding:.7em;">Rola</th><th style="padding:.7em;">Punkty globalne</th><th style="padding:.7em;">XP</th><th style="padding:.7em;">Próby</th><th style="padding:.7em;">Rozwiązania</th><th style="padding:.7em;">Punkty turniejowe</th></tr></thead>
+            <tbody>{% for row in analytics.members %}
+            <tr style="border-bottom:1px solid #444;"><td style="padding:.7em;">{{ row.username }}</td><td style="padding:.7em;">{{ "Lider" if row.role == "leader" else "Członek" }}</td><td style="padding:.7em;">{{ row.score }}</td><td style="padding:.7em;">{{ row.xp }}</td><td style="padding:.7em;">{{ row.attempts }}</td><td style="padding:.7em;">{{ row.solves }}</td><td style="padding:.7em;">{{ row.tournament_points }}</td></tr>
+            {% else %}<tr><td colspan="7" style="padding:.8em; color:#aaa;">Brak członków.</td></tr>{% endfor %}</tbody>
+        </table>
+    </div>
+
+    <header class="major" style="margin-top:2em;"><h2>Wyniki turniejowe drużyny</h2></header>
+    <div style="overflow-x:auto;">
+        <table style="width:100%; min-width:550px; border-collapse:collapse;">
+            <thead><tr style="text-align:left; border-bottom:2px solid #555;"><th style="padding:.7em;">Turniej</th><th style="padding:.7em;">Status</th><th style="padding:.7em;">Rozwiązania</th><th style="padding:.7em;">Punkty</th></tr></thead>
+            <tbody>{% for row in analytics.tournaments %}
+            <tr style="border-bottom:1px solid #444;"><td style="padding:.7em;"><a href="/tournaments/{{ row.id }}">{{ row.title }}</a></td><td style="padding:.7em;">{{ row.status }}</td><td style="padding:.7em;">{{ row.solves }}</td><td style="padding:.7em;">{{ row.points }}</td></tr>
+            {% else %}<tr><td colspan="4" style="padding:.8em; color:#aaa;">Drużyna nie brała jeszcze udziału w turniejach.</td></tr>{% endfor %}</tbody>
+        </table>
+    </div>
+    <div style="text-align:center; margin-top:2em;"><a href="/teams" class="button alt">Wróć do drużyny</a></div>
+</section>
+{% endblock %}

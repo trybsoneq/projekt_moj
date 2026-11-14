@@ -97,7 +97,8 @@
     </div>
     {% endfor %}
     {% endif %}
-    <div style="text-align:center; margin-top:2em;">
+    <div style="text-align:center; margin-top:2em; display:flex; justify-content:center; gap:.7em; flex-wrap:wrap;">
+        {% if team %}<a href="/teams/analytics" class="button">Statystyki drużyny</a>{% endif %}
         <a href="/tournaments" class="button alt">Przejdź do turniejów</a>
     </div>
 </section>
