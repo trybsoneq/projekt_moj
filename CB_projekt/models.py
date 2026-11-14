@@ -192,3 +192,9 @@ from tournament_models import (  # noqa: F401,E402
     Team, TeamMember, TeamInvitation, Tournament, TournamentChallenge,
     TournamentParticipant, TournamentTeamParticipant, TournamentSolve,
 )
+
+
+# Register in-app notification tables on the shared SQLAlchemy metadata.
+from notification_models import (  # noqa: F401,E402
+    Notification, NotificationPreference, Announcement, NotificationDispatch,
+)

@@ -1,0 +1,53 @@
+{% extends "zerofour/base.html" %}
+
+{% block banner %}
+<div id="banner" style="text-align:center;">
+    <h2>Komunikaty administratora</h2>
+    <p>Publikuj ważne informacje, które trafią do centrum powiadomień użytkowników.</p>
+</div>
+{% endblock %}
+
+{% block content %}
+<section class="container box" style="max-width:950px; margin:0 auto 2em; padding:2em;">
+    {% if message %}
+    <div style="padding:1em; margin-bottom:1.5em; border:1px solid #438b67; border-radius:8px; color:#8ce0ae;">{{ message }}</div>
+    {% endif %}
+    <header class="major">
+        <h2>Opublikuj nowy komunikat</h2>
+        <p>Publikacja tworzy powiadomienie dla wszystkich użytkowników, którzy mają włączoną kategorię „Komunikaty”.</p>
+    </header>
+    <form method="post" action="/admin/announcements/create">
+        <label for="announcement-title">Tytuł (3–140 znaków)</label>
+        <input id="announcement-title" name="title" type="text" maxlength="140" minlength="3" required placeholder="Np. Planowana przerwa techniczna">
+        <label for="announcement-body" style="margin-top:1em; display:block;">Treść (5–3000 znaków)</label>
+        <textarea id="announcement-body" name="body" rows="5" minlength="5" maxlength="3000" required placeholder="Wpisz treść komunikatu..."></textarea>
+        <div style="text-align:center; margin-top:1em;">
+            <button type="submit" class="button">Opublikuj i wyślij</button>
+        </div>
+    </form>
+</section>
+
+<section class="container box" style="max-width:950px; margin:0 auto; padding:2em;">
+    <header class="major"><h2>Historia komunikatów</h2></header>
+    {% for row in announcements %}
+    <article style="padding:1.1em; border:1px solid #444; border-radius:10px; margin-bottom:1em; {% if not row.announcement.is_active %}opacity:.6;{% endif %}">
+        <div style="display:flex; align-items:flex-start; justify-content:space-between; flex-wrap:wrap; gap:1em;">
+            <div style="flex:1; min-width:230px;">
+                <h3 style="margin:0 0 .4em;">{{ row.announcement.title }}</h3>
+                <p style="white-space:pre-line; margin:.5em 0;">{{ row.announcement.body }}</p>
+                <small style="color:#888;">Opublikowano: {{ row.announcement.sent_at.strftime("%Y-%m-%d %H:%M:%S") if row.announcement.sent_at else "—" }}</small>
+                <div style="color:#aaa; margin-top:.4em;">Utworzone powiadomienia: {{ row.recipient_count }}</div>
+                <div style="margin-top:.3em;">{% if row.announcement.is_active %}<span style="color:#8ce0ae;">Aktywny</span>{% else %}<span style="color:#aaa;">Zarchiwizowany</span>{% endif %}</div>
+            </div>
+            {% if row.announcement.is_active %}
+            <form method="post" action="/admin/announcements/{{ row.announcement.id }}/archive" onsubmit="return confirm('Zarchiwizować ten komunikat?');">
+                <button type="submit" class="button alt">Archiwizuj</button>
+            </form>
+            {% endif %}
+        </div>
+    </article>
+    {% else %}
+    <p style="color:#aaa; text-align:center;">Nie opublikowano jeszcze żadnych komunikatów.</p>
+    {% endfor %}
+</section>
+{% endblock %}

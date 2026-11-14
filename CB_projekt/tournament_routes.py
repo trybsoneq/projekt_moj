@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session
 import models
 from database import get_db
 from security import get_current_user, require_admin, require_user
+from notification_service import create_notification, notify_all_users_once, notify_users_once
 from tournament_service import (
     TournamentError,
     join_tournament,
@@ -198,12 +199,24 @@ def invite_to_team(
     if pending:
         return _redirect("/teams", "Zaproszenie do tego użytkownika już oczekuje na odpowiedź.")
 
-    db.add(models.TeamInvitation(
+    invitation = models.TeamInvitation(
         team_id=membership.team_id,
         invited_user_id=target.id,
         invited_by_user_id=current_user.id,
         status="pending",
-    ))
+    )
+    db.add(invitation)
+    db.flush()
+    team = db.query(models.Team).filter_by(id=membership.team_id).first()
+    create_notification(
+        db,
+        target.id,
+        "team",
+        "Zaproszenie do drużyny",
+        f"Użytkownik {current_user.username} zaprasza Cię do drużyny „{team.name if team else 'CTF'}”.",
+        target_url="/teams",
+        dedupe_key=f"team-invitation:{invitation.id}",
+    )
     db.commit()
     return _redirect("/teams", f"Wysłano zaproszenie do użytkownika {target.username}.")
 
@@ -264,6 +277,17 @@ def accept_team_invitation(
                 tournament_id=tournament.id,
                 user_id=current_user.id,
             ))
+    team = db.query(models.Team).filter_by(id=invitation.team_id).first()
+    if team and team.owner_user_id != current_user.id:
+        create_notification(
+            db,
+            team.owner_user_id,
+            "team",
+            "Zaproszenie zaakceptowane",
+            f"Użytkownik {current_user.username} dołączył do drużyny „{team.name}”.",
+            target_url="/teams",
+            dedupe_key=f"team-joined:{invitation.id}",
+        )
     db.commit()
     return _redirect("/teams", "Dołączono do drużyny.")
 
@@ -694,7 +718,33 @@ def update_tournament_status(
         return _redirect("/admin/tournaments", "Nieprawidłowy status turnieju.")
     if status == "open" and datetime.utcnow() >= tournament.ends_at:
         return _redirect("/admin/tournaments", "Nie można otworzyć zapisów po dacie zakończenia.")
+    previous_status = tournament.status
     tournament.status = status
+    if status == "open" and previous_status != "open":
+        notify_all_users_once(
+            db,
+            "tournament",
+            f"Nowy turniej: {tournament.title}",
+            f"Otwarto zapisy do turnieju. Sprawdź termin, tryb rywalizacji i listę zadań.",
+            target_url=f"/tournaments/{tournament.id}",
+            event_key=f"tournament:{tournament.id}:opened",
+        )
+    elif status == "finished" and previous_status != "finished":
+        participant_ids = [
+            row[0]
+            for row in db.query(models.TournamentParticipant.user_id)
+            .filter(models.TournamentParticipant.tournament_id == tournament.id)
+            .all()
+        ]
+        notify_users_once(
+            db,
+            participant_ids,
+            "tournament",
+            f"Turniej „{tournament.title}” został zakończony",
+            "Administrator zakończył zawody. Otwórz stronę turnieju, aby zobaczyć końcowy ranking.",
+            target_url=f"/tournaments/{tournament.id}",
+            event_key=f"tournament:{tournament.id}:finished",
+        )
     db.commit()
     return _redirect("/admin/tournaments", f"Zmieniono status turnieju „{tournament.title}”.")
 

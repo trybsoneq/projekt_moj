@@ -29,10 +29,13 @@ from migrate_activity import migrate as migrate_activity
 from migrate_hints import migrate as migrate_hints
 from migrate_achievements import migrate as migrate_achievements
 from migrate_tournaments import migrate as migrate_tournaments
+from migrate_notifications import migrate as migrate_notifications
 from hint_routes import router as hint_router
 from hint_service import HintError, get_hint_view, save_challenge_hints
 from activity_routes import router as activity_router
 from tournament_routes import router as tournament_router
+from notification_routes import router as notification_router
+from notification_service import process_due_tournament_notifications
 from activity_service import (
     MAX_FLAG_ATTEMPTS_PER_MINUTE,
     SubmissionRateLimitError,
@@ -53,7 +56,36 @@ app.include_router(infrastructure_router)
 app.include_router(activity_router)
 app.include_router(hint_router)
 app.include_router(tournament_router)
+app.include_router(notification_router)
 logger = logging.getLogger(__name__)
+
+NOTIFICATION_POLL_INTERVAL_SECONDS = 60
+
+
+@app.middleware("http")
+async def load_unread_notification_count(request: Request, call_next):
+    """Expose the signed-in user's unread count to the shared navigation."""
+    request.state.unread_notification_count = 0
+    if not request.url.path.startswith(("/assets/", "/images/")):
+        token = request.cookies.get("ctf_session")
+        if token:
+            db = SessionLocal()
+            try:
+                current_user = get_current_user(request, db, token)
+                if current_user:
+                    request.state.unread_notification_count = (
+                        db.query(models.Notification)
+                        .filter(
+                            models.Notification.user_id == current_user.id,
+                            models.Notification.is_read.is_(False),
+                        )
+                        .count()
+                    )
+            except Exception:
+                logger.exception("Nie udało się pobrać licznika powiadomień.")
+            finally:
+                db.close()
+    return await call_next(request)
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 TEMPLATES_DIR = os.path.join(BASE_DIR, "templates")
@@ -124,6 +156,7 @@ init_database()
 migrate_hints()
 migrate_achievements()
 migrate_tournaments()
+migrate_notifications()
 
 
 async def _instance_cleanup_worker():
@@ -137,20 +170,45 @@ async def _instance_cleanup_worker():
         await asyncio.sleep(CLEANUP_INTERVAL_SECONDS)
 
 
+def _process_due_notifications():
+    db = SessionLocal()
+    try:
+        process_due_tournament_notifications(db)
+        db.commit()
+    except Exception:
+        db.rollback()
+        logger.exception("Błąd przetwarzania zaplanowanych powiadomień.")
+    finally:
+        db.close()
+
+
+async def _notification_worker():
+    while True:
+        try:
+            await asyncio.to_thread(_process_due_notifications)
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            logger.exception("Błąd cyklicznej obsługi powiadomień.")
+        await asyncio.sleep(NOTIFICATION_POLL_INTERVAL_SECONDS)
+
+
 @app.on_event("startup")
-async def start_instance_cleanup_worker():
+async def start_background_workers():
     app.state.instance_cleanup_task = asyncio.create_task(_instance_cleanup_worker())
+    app.state.notification_task = asyncio.create_task(_notification_worker())
 
 
 @app.on_event("shutdown")
-async def stop_instance_cleanup_worker():
-    task = getattr(app.state, "instance_cleanup_task", None)
-    if task:
-        task.cancel()
-        try:
-            await task
-        except asyncio.CancelledError:
-            pass
+async def stop_background_workers():
+    for task_name in ("instance_cleanup_task", "notification_task"):
+        task = getattr(app.state, task_name, None)
+        if task:
+            task.cancel()
+            try:
+                await task
+            except asyncio.CancelledError:
+                pass
 
 
 def get_user_points(db: Session, user):

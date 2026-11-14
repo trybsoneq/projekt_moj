@@ -58,6 +58,15 @@ class TemplateCompilationTests(unittest.TestCase):
         self.assertIn('href="/teams"', source)
         self.assertIn('href="/admin/tournaments"', source)
 
+    def test_notification_templates_compile(self):
+        self.environment.get_template("zerofour/notifications.html")
+        self.environment.get_template("zerofour/admin_announcements.html")
+
+    def test_base_contains_notification_navigation(self):
+        source = (TEMPLATE_DIR / "zerofour" / "base.html").read_text(encoding="utf-8")
+        self.assertIn('href="/notifications"', source)
+        self.assertIn('href="/admin/announcements"', source)
+
     def test_base_template_loads_custom_navigation_css(self):
         base_path = TEMPLATE_DIR / "zerofour" / "base.html"
         css_path = TEMPLATE_DIR / "zerofour" / "assets" / "css" / "custom.css"

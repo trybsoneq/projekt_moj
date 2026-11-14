@@ -1,0 +1,95 @@
+{% extends "zerofour/base.html" %}
+
+{% block banner %}
+<div id="banner" style="text-align:center;">
+    <h2>Centrum powiadomień</h2>
+    <p>Ważne informacje o drużynach, turniejach, osiągnięciach i komunikatach CyberSim.</p>
+</div>
+{% endblock %}
+
+{% block content %}
+<section class="container box" style="max-width:1050px; margin:0 auto 2em; padding:2em;">
+    {% if message %}
+    <div style="padding:1em; margin-bottom:1.5em; border:1px solid #438b67; border-radius:8px; color:#8ce0ae;">{{ message }}</div>
+    {% endif %}
+
+    <div style="display:flex; align-items:center; justify-content:space-between; gap:1em; flex-wrap:wrap;">
+        <div>
+            <h2 style="margin:0;">Twoje powiadomienia</h2>
+            <p style="color:#aaa; margin:.3em 0 0;">Nieprzeczytane: <strong>{{ unread_count }}</strong></p>
+        </div>
+        {% if unread_count %}
+        <form method="post" action="/notifications/read-all">
+            <button type="submit" class="button alt">Oznacz wszystkie jako przeczytane</button>
+        </form>
+        {% endif %}
+    </div>
+
+    <div style="margin-top:1.5em;">
+        {% for item in notifications %}
+        <article style="padding:1em 1.15em; margin-bottom:.8em; border:1px solid {% if not item.is_read %}#458cb5{% else %}#444{% endif %}; border-radius:10px; background:{% if not item.is_read %}rgba(69,140,181,.08){% else %}rgba(255,255,255,.02){% endif %};">
+            <div style="display:flex; align-items:flex-start; justify-content:space-between; gap:1em; flex-wrap:wrap;">
+                <div style="flex:1; min-width:230px;">
+                    <div style="display:flex; align-items:center; flex-wrap:wrap; gap:.5em;">
+                        <strong style="font-size:1.05em;">{{ item.title }}</strong>
+                        {% if not item.is_read %}<span style="font-size:.75em; color:#70c2ff;">NOWE</span>{% endif %}
+                    </div>
+                    <p style="margin:.55em 0; white-space:pre-line;">{{ item.body }}</p>
+                    <small style="color:#888;">{{ item.created_at.strftime("%Y-%m-%d %H:%M:%S") }} ·
+                        {% if item.category == "team" %}Drużyny
+                        {% elif item.category == "tournament" %}Turnieje
+                        {% elif item.category == "achievement" %}Osiągnięcia
+                        {% else %}Komunikaty{% endif %}
+                    </small>
+                </div>
+                <div style="display:flex; gap:.5em; flex-wrap:wrap;">
+                    {% if item.target_url %}
+                    <a class="button alt" href="{{ item.target_url }}">Otwórz</a>
+                    {% endif %}
+                    {% if not item.is_read %}
+                    <form method="post" action="/notifications/{{ item.id }}/read">
+                        <button type="submit" class="button">Oznacz jako przeczytane</button>
+                    </form>
+                    {% endif %}
+                </div>
+            </div>
+        </article>
+        {% else %}
+        <p style="text-align:center; color:#aaa; padding:2em 0;">Nie masz jeszcze żadnych powiadomień.</p>
+        {% endfor %}
+    </div>
+    {% if notifications|length == 100 %}
+    <p style="text-align:center; color:#888;">Wyświetlono maksymalnie 100 najnowszych powiadomień.</p>
+    {% endif %}
+</section>
+
+<section class="container box" style="max-width:1050px; margin:0 auto; padding:2em;">
+    <header class="major">
+        <h2>Ustawienia powiadomień</h2>
+        <p>Wybierz, o jakich zdarzeniach chcesz otrzymywać informacje w CyberSim.</p>
+    </header>
+    <form method="post" action="/notifications/settings">
+        <div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:1em;">
+            <label style="display:flex; align-items:center; gap:.7em; padding:.9em; border:1px solid #444; border-radius:8px;">
+                <input type="checkbox" name="team_enabled" value="true" {% if preferences.team_enabled %}checked{% endif %} style="width:auto;">
+                <span><strong>Drużyny</strong><br><small style="color:#aaa;">Zaproszenia i zmiany w składzie</small></span>
+            </label>
+            <label style="display:flex; align-items:center; gap:.7em; padding:.9em; border:1px solid #444; border-radius:8px;">
+                <input type="checkbox" name="tournament_enabled" value="true" {% if preferences.tournament_enabled %}checked{% endif %} style="width:auto;">
+                <span><strong>Turnieje</strong><br><small style="color:#aaa;">Zapisy, przypomnienia i wyniki</small></span>
+            </label>
+            <label style="display:flex; align-items:center; gap:.7em; padding:.9em; border:1px solid #444; border-radius:8px;">
+                <input type="checkbox" name="achievement_enabled" value="true" {% if preferences.achievement_enabled %}checked{% endif %} style="width:auto;">
+                <span><strong>Osiągnięcia</strong><br><small style="color:#aaa;">Nowe odznaki i nagrody XP</small></span>
+            </label>
+            <label style="display:flex; align-items:center; gap:.7em; padding:.9em; border:1px solid #444; border-radius:8px;">
+                <input type="checkbox" name="announcement_enabled" value="true" {% if preferences.announcement_enabled %}checked{% endif %} style="width:auto;">
+                <span><strong>Komunikaty</strong><br><small style="color:#aaa;">Ogłoszenia administratora</small></span>
+            </label>
+        </div>
+        <div style="text-align:center; margin-top:1.5em;">
+            <button type="submit" class="button">Zapisz ustawienia</button>
+        </div>
+    </form>
+</section>
+{% endblock %}

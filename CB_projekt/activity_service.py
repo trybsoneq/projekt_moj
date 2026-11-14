@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session
 import models
 from achievement_service import process_successful_solve
 from tournament_service import record_tournament_solve
+from notification_service import create_notification
 
 FLAG_ATTEMPT_WINDOW_SECONDS = 60
 MAX_FLAG_ATTEMPTS_PER_MINUTE = max(
@@ -144,6 +145,16 @@ def record_flag_submission(
             )
         )
         gamification_result = process_successful_solve(db, user, challenge, now)
+        for achievement in gamification_result.get("achievements_awarded", []):
+            create_notification(
+                db,
+                user.id,
+                "achievement",
+                f"Nowa odznaka: {achievement['name']}",
+                f"Zdobywasz osiągnięcie {achievement['icon']} {achievement['name']} i otrzymujesz +{achievement['xp_reward']} XP.",
+                target_url="/profile",
+                dedupe_key=f"achievement:{user.id}:{achievement['code']}",
+            )
         tournament_points_awarded = record_tournament_solve(db, user, challenge, now)
 
     try:

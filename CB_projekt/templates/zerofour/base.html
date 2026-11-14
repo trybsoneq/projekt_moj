@@ -39,6 +39,9 @@
                                 </li>
                                 
                                 {% if username %}
+                                    <li {% if active_page == 'notifications' %}class="current_page_item"{% endif %}>
+                                        <a href="/notifications">Powiadomienia{% set unread = request.state.unread_notification_count|default(0) %}{% if unread %} <span style="display:inline-block; min-width:1.5em; padding:.1em .45em; border-radius:12px; background:#d94b4b; color:#fff; text-align:center; font-size:.8em;">{{ unread }}</span>{% endif %}</a>
+                                    </li>
                                     <li {% if active_page == 'teams' %}class="current_page_item"{% endif %}>
                                         <a href="/teams">Drużyny</a>
                                     </li>
@@ -54,6 +57,9 @@
                                         </li>
                                         <li {% if active_page == 'admin_tournaments' %}class="current_page_item"{% endif %}>
                                             <a href="/admin/tournaments" style="color: #66b3ff;">Turnieje — panel</a>
+                                        </li>
+                                        <li {% if active_page == 'admin_announcements' %}class="current_page_item"{% endif %}>
+                                            <a href="/admin/announcements" style="color: #66b3ff;">Komunikaty</a>
                                         </li>
                                     {% endif %}
                                     

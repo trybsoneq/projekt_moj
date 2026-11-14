@@ -107,3 +107,14 @@ Ten dokument opisuje rolę plików dodanych lub zmienionych w ramach rozbudowy p
 Dodano moduły `tournament_models.py`, `tournament_service.py`, `tournament_routes.py` oraz migrację `migrate_tournaments.py`. Administrator może tworzyć i zamykać turnieje, wybierać zadania, ustalać terminy UTC i limit zgłoszeń. Użytkownicy tworzą drużyny, zapraszają członków i przekazują przywództwo. Turnieje obsługują tryb indywidualny i drużynowy; w drużynowym dostępny jest osobny ranking graczy i zespołów.
 
 Punkty turniejowe są zapisywane w tabeli `tournament_solves` i nie zmieniają globalnych punktów ani XP. Zestaw zadań i wartości punktowe są utrwalane przy tworzeniu turnieju. Nowe widoki to `teams.html`, `tournaments.html`, `tournament_detail.html`, `admin_tournaments.html` i `admin_tournament_detail.html`. Testy etapu znajdują się w `test_tournaments.py`.
+
+
+## Etap 8 – centrum powiadomień i komunikaty administratora
+
+Dodano moduły `notification_models.py`, `notification_service.py`, `notification_routes.py` oraz migrację `migrate_notifications.py`. Użytkownicy mają centrum powiadomień pod adresem `/notifications`, licznik nieprzeczytanych wiadomości w menu, możliwość oznaczania pojedynczych i wszystkich wiadomości jako przeczytanych oraz ustawienia czterech kategorii: drużyny, turnieje, osiągnięcia i komunikaty.
+
+Powiadomienia są wyzwalane przez zaproszenia do drużyn, zaakceptowanie zaproszenia przez nowego członka, publikację turnieju, zdobycie odznaki oraz cykl życia turnieju. Worker aplikacji sprawdza co 60 sekund przypomnienia 24 godziny i godzinę przed startem, wysyła informację o starcie oraz automatycznie oznacza zakończony turniej i rozsyła końcowe powiadomienie. Klucze zdarzeń zapobiegają ponownemu wysyłaniu tych samych wiadomości.
+
+Administrator ma stronę `/admin/announcements`, gdzie publikuje komunikaty dla użytkowników i archiwizuje wcześniejsze ogłoszenia. Do komunikatów nie jest wymagany e-mail ani zewnętrzny dostawca.
+
+Nowe szablony: `notifications.html` i `admin_announcements.html`. Testy modułu znajdują się w `test_notifications.py`.
