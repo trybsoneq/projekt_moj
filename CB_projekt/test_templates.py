@@ -42,6 +42,22 @@ class TemplateCompilationTests(unittest.TestCase):
     def test_challenge_template_compiles(self):
         self.environment.get_template("zerofour/challenge.html")
 
+    def test_tournament_templates_compile(self):
+        for name in (
+            "zerofour/teams.html",
+            "zerofour/tournaments.html",
+            "zerofour/tournament_detail.html",
+            "zerofour/admin_tournaments.html",
+            "zerofour/admin_tournament_detail.html",
+        ):
+            self.environment.get_template(name)
+
+    def test_base_contains_team_and_tournament_navigation(self):
+        source = (TEMPLATE_DIR / "zerofour" / "base.html").read_text(encoding="utf-8")
+        self.assertIn('href="/tournaments"', source)
+        self.assertIn('href="/teams"', source)
+        self.assertIn('href="/admin/tournaments"', source)
+
     def test_base_template_loads_custom_navigation_css(self):
         base_path = TEMPLATE_DIR / "zerofour" / "base.html"
         css_path = TEMPLATE_DIR / "zerofour" / "assets" / "css" / "custom.css"

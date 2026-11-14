@@ -1,0 +1,82 @@
+{% extends "zerofour/base.html" %}
+
+{% block banner %}
+<div id="banner" style="text-align:center;">
+    <h2>Zarządzanie turniejami</h2>
+    <p>Twórz zawody, wybieraj zadania, ustawiaj terminy i kontroluj zapisy.</p>
+</div>
+{% endblock %}
+
+{% block content %}
+<section class="container box" style="max-width:1000px; margin:0 auto 2em; padding:2em;">
+    {% if message %}
+    <div style="padding:1em; margin-bottom:1.5em; border:1px solid #438b67; border-radius:8px; color:#8ce0ae;">{{ message }}</div>
+    {% endif %}
+    <header class="major">
+        <h2>Utwórz turniej</h2>
+        <p>Daty są interpretowane jako UTC. Zapisy otwiera administrator po zapisaniu turnieju.</p>
+    </header>
+    <form method="post" action="/admin/tournaments/create">
+        <div class="row gtr-50">
+            <div class="col-12"><label for="tournament-title">Nazwa turnieju</label><input id="tournament-title" name="title" type="text" maxlength="120" required placeholder="Np. CyberSim Winter Cup"></div>
+            <div class="col-12"><label for="tournament-description">Opis i zasady</label><textarea id="tournament-description" name="description" rows="3" placeholder="Opis, zasady punktacji i warunki udziału"></textarea></div>
+            <div class="col-6 col-12-small">
+                <label for="competition-type">Tryb zawodów</label>
+                <select id="competition-type" name="competition_type"><option value="individual">Indywidualny</option><option value="team">Drużynowy</option></select>
+            </div>
+            <div class="col-6 col-12-small">
+                <label for="max-participants">Limit uczestników / drużyn (opcjonalnie)</label>
+                <input id="max-participants" name="max_participants_text" type="number" min="1" placeholder="Bez limitu">
+            </div>
+            <div class="col-6 col-12-small"><label for="starts-at">Start (UTC)</label><input id="starts-at" name="starts_at" type="datetime-local" required></div>
+            <div class="col-6 col-12-small"><label for="ends-at">Koniec (UTC)</label><input id="ends-at" name="ends_at" type="datetime-local" required></div>
+        </div>
+        <h3 style="margin-top:1.5em;">Zadania w turnieju</h3>
+        {% if challenges %}
+        <div class="row gtr-25">
+            {% for challenge in challenges %}
+            <div class="col-6 col-12-small" style="padding:.5em 1em;">
+                <label style="display:flex; align-items:center; gap:.7em;">
+                    <input type="checkbox" name="challenge_ids" value="{{ challenge.id }}" style="width:auto;">
+                    <span>{{ challenge.title }} · {{ challenge.points }} pkt</span>
+                </label>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <p style="color:#aaa;">Najpierw dodaj zadania CTF — turniej musi zawierać co najmniej jedno.</p>
+        {% endif %}
+        <button type="submit" class="button" style="margin-top:1em;" {% if not challenges %}disabled{% endif %}>Utwórz turniej</button>
+    </form>
+</section>
+
+<section class="container box" style="max-width:1000px; margin:0 auto; padding:2em;">
+    <header class="major"><h2>Utworzone turnieje</h2></header>
+    {% for row in tournament_rows %}
+    <article style="padding:1.1em; border:1px solid #444; border-radius:10px; margin-bottom:1em;">
+        <div style="display:flex; justify-content:space-between; gap:1em; flex-wrap:wrap;">
+            <div>
+                <h3 style="margin:0 0 .4em;">{{ row.tournament.title }}</h3>
+                <p style="color:#aaa; margin:0;">{% if row.tournament.competition_type == "team" %}Drużynowy{% else %}Indywidualny{% endif %} · {{ row.challenge_count }} zadań · {{ row.participant_count }} uczestników</p>
+                <small style="color:#888;">{{ row.tournament.starts_at.strftime("%Y-%m-%d %H:%M") }} – {{ row.tournament.ends_at.strftime("%Y-%m-%d %H:%M") }} UTC</small>
+            </div>
+            <div>
+                <strong>{{ row.tournament.status }}</strong>
+                <a href="/admin/tournaments/{{ row.tournament.id }}" class="button alt" style="margin-left:.5em;">Uczestnicy i wyniki</a>
+                <form method="post" action="/admin/tournaments/{{ row.tournament.id }}/status" style="display:flex; gap:.5em; flex-wrap:wrap; margin-top:.75em;">
+                    <select name="status" aria-label="Status turnieju">
+                        <option value="draft" {% if row.tournament.status == "draft" %}selected{% endif %}>Szkic</option>
+                        <option value="open" {% if row.tournament.status == "open" %}selected{% endif %}>Otwórz zapisy</option>
+                        <option value="finished" {% if row.tournament.status == "finished" %}selected{% endif %}>Zakończ</option>
+                    </select>
+                    <button type="submit" class="button">Zapisz status</button>
+                </form>
+            </div>
+        </div>
+    </article>
+    {% else %}
+    <p style="color:#aaa;">Nie utworzono jeszcze turniejów.</p>
+    {% endfor %}
+    <div style="text-align:center; margin-top:1.5em;"><a href="/tournaments" class="button alt">Zobacz stronę turniejów</a></div>
+</section>
+{% endblock %}

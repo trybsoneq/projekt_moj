@@ -1,0 +1,42 @@
+{% extends "zerofour/base.html" %}
+
+{% block banner %}
+<div id="banner" style="text-align:center;">
+    <h2>{{ tournament.title }} — administracja</h2>
+    <p>Uczestnicy, drużyny i aktualne wyniki turnieju.</p>
+</div>
+{% endblock %}
+
+{% block content %}
+<section class="container box" style="max-width:1000px; margin:0 auto 2em; padding:2em;">
+    <p><strong>Status:</strong> {{ tournament.status }} · <strong>Tryb:</strong> {{ "Drużynowy" if tournament.competition_type == "team" else "Indywidualny" }}</p>
+    <h3>Lista zgłoszonych graczy</h3>
+    {% if participants %}
+    <ul>{% for username in participants %}<li>{{ username }}</li>{% endfor %}</ul>
+    {% else %}<p style="color:#aaa;">Brak zgłoszonych graczy.</p>{% endif %}
+
+    {% if tournament.competition_type == "team" %}
+    <h3>Drużyny</h3>
+    {% if teams %}<ul>{% for name in teams %}<li>{{ name }}</li>{% endfor %}</ul>{% else %}<p style="color:#aaa;">Brak zgłoszonych drużyn.</p>{% endif %}
+    {% endif %}
+
+    <header class="major" style="margin-top:2em;"><h2>Ranking indywidualny</h2></header>
+    <div style="overflow-x:auto;"><table style="width:100%; border-collapse:collapse;">
+        <thead><tr><th>Miejsce</th><th>Gracz</th><th>Punkty</th><th>Rozwiązania</th><th>Ostatnie rozwiązanie</th></tr></thead>
+        <tbody>{% for row in individual_board %}
+        <tr><td>{{ row.rank }}</td><td>{{ row.name }}</td><td>{{ row.points }}</td><td>{{ row.solves }}</td><td>{{ row.last_solve.strftime("%Y-%m-%d %H:%M:%S") if row.last_solve else "—" }}</td></tr>
+        {% else %}<tr><td colspan="5">Brak wyników.</td></tr>{% endfor %}</tbody>
+    </table></div>
+
+    {% if tournament.competition_type == "team" %}
+    <header class="major" style="margin-top:2em;"><h2>Ranking drużynowy</h2></header>
+    <div style="overflow-x:auto;"><table style="width:100%; border-collapse:collapse;">
+        <thead><tr><th>Miejsce</th><th>Drużyna</th><th>Punkty</th><th>Rozwiązania</th><th>Ostatnie rozwiązanie</th></tr></thead>
+        <tbody>{% for row in team_board %}
+        <tr><td>{{ row.rank }}</td><td>{{ row.name }}</td><td>{{ row.points }}</td><td>{{ row.solves }}</td><td>{{ row.last_solve.strftime("%Y-%m-%d %H:%M:%S") if row.last_solve else "—" }}</td></tr>
+        {% else %}<tr><td colspan="5">Brak wyników.</td></tr>{% endfor %}</tbody>
+    </table></div>
+    {% endif %}
+    <div style="text-align:center; margin-top:2em;"><a href="/admin/tournaments" class="button alt">Wróć do zarządzania turniejami</a></div>
+</section>
+{% endblock %}

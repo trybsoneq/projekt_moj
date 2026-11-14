@@ -1,0 +1,132 @@
+{% extends "zerofour/base.html" %}
+
+{% block banner %}
+<div id="banner" style="text-align:center;">
+    <h2>{{ tournament.title }}</h2>
+    <p>{% if tournament.competition_type == "team" %}Turniej drużynowy{% else %}Turniej indywidualny{% endif %}</p>
+</div>
+{% endblock %}
+
+{% block content %}
+<section class="container box" style="max-width:1100px; margin:0 auto 2em; padding:2em;">
+    {% if message %}
+    <div style="padding:1em; margin-bottom:1.5em; border:1px solid #438b67; border-radius:8px; color:#8ce0ae;">{{ message }}</div>
+    {% endif %}
+    <p>{{ tournament.description or "Brak opisu turnieju." }}</p>
+    {% if not username %}
+    <p style="padding:.8em; border:1px solid #555; border-radius:8px;">Przeglądasz turniej jako gość. <a href="/login">Zaloguj się</a>, aby dołączyć i zdobywać punkty.</p>
+    {% endif %}
+    {% if tournament.status == "open" %}
+    <p id="tournament-detail-countdown" data-target="{{ tournament.starts_at.strftime("%Y-%m-%dT%H:%M:%SZ") }}" style="color:#70c2ff;">Ładowanie odliczania do startu…</p>
+    {% endif %}
+    <div class="row gtr-50" style="margin:1.5em 0;">
+        <div class="col-4 col-12-small"><strong>Status:</strong> {% if tournament.status == "draft" %}Szkic{% elif tournament.status == "open" %}Zapisy otwarte{% else %}Zakończony{% endif %}</div>
+        <div class="col-4 col-12-small"><strong>Start:</strong> {{ tournament.starts_at.strftime("%Y-%m-%d %H:%M") }} UTC</div>
+        <div class="col-4 col-12-small"><strong>Koniec:</strong> {{ tournament.ends_at.strftime("%Y-%m-%d %H:%M") }} UTC</div>
+        <div class="col-4 col-12-small"><strong>Uczestnicy:</strong> {{ participant_count }} / {{ tournament.max_participants or "bez limitu" }}</div>
+        <div class="col-4 col-12-small"><strong>Zadania:</strong> {{ challenge_rows|length }}</div>
+        <div class="col-4 col-12-small"><strong>Punktacja:</strong> osobna dla turnieju</div>
+    </div>
+
+    {% if is_joined %}
+    <div style="padding:1em; border:1px solid #438b67; border-radius:8px; margin:1em 0; color:#8ce0ae;">{% if tournament.competition_type == "team" %}Twoja drużyna{% else %}Ty{% endif %} jesteś zapisany do turnieju.</div>
+    {% elif can_join and tournament.competition_type == "individual" %}
+    <form method="post" action="/tournaments/{{ tournament.id }}/join" style="margin:1em 0;">
+        <button type="submit" class="button">Zapisz się indywidualnie</button>
+    </form>
+    {% elif can_join and can_manage_team_entry %}
+    <form method="post" action="/tournaments/{{ tournament.id }}/join" style="margin:1em 0;">
+        <button type="submit" class="button">Zapisz drużynę: {{ current_team.name }}</button>
+    </form>
+    {% elif can_join and tournament.competition_type == "team" %}
+    <p style="color:#aaa;">Aby zapisać się do turnieju, utwórz drużynę lub poproś jej lidera o zgłoszenie składu.</p>
+    {% endif %}
+
+    {% if is_joined and can_join %}
+    <form method="post" action="/tournaments/{{ tournament.id }}/leave" style="margin:1em 0;">
+        <button type="submit" class="button alt">Anuluj udział przed startem</button>
+    </form>
+    {% endif %}
+
+    <header class="major" style="margin-top:2em;">
+        <h2>Zadania turniejowe</h2>
+        <p>Wartości punktowe zostały zapisane przy tworzeniu turnieju i nie zmienią się po edycji zadania.</p>
+    </header>
+    <div style="overflow-x:auto;">
+        <table style="width:100%; border-collapse:collapse;">
+            <thead><tr style="text-align:left; border-bottom:2px solid #555;"><th style="padding:.7em;">Zadanie</th><th style="padding:.7em;">Punkty turniejowe</th></tr></thead>
+            <tbody>
+                {% for item, challenge in challenge_rows %}
+                <tr style="border-bottom:1px solid #444;">
+                    <td style="padding:.7em;">{{ challenge.title }}</td>
+                    <td style="padding:.7em;">{{ item.points }} pkt</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <header class="major" style="margin-top:2em;">
+        <h2>Ranking indywidualny</h2>
+        <p>Punkty i czas ostatniego zaliczonego zadania w tym turnieju.</p>
+    </header>
+    <div style="overflow-x:auto;">
+        <table style="width:100%; min-width:620px; border-collapse:collapse;">
+            <thead><tr style="text-align:left; border-bottom:2px solid #555;"><th style="padding:.7em;">Miejsce</th><th style="padding:.7em;">Gracz</th><th style="padding:.7em;">Punkty</th><th style="padding:.7em;">Rozwiązania</th><th style="padding:.7em;">Ostatnie rozwiązanie</th></tr></thead>
+            <tbody>
+                {% for row in individual_board %}
+                <tr style="border-bottom:1px solid #444;">
+                    <td style="padding:.7em;">{{ row.rank }}</td><td style="padding:.7em;">{{ row.name }}</td><td style="padding:.7em;">{{ row.points }}</td><td style="padding:.7em;">{{ row.solves }}</td>
+                    <td style="padding:.7em;">{{ row.last_solve.strftime("%Y-%m-%d %H:%M:%S") if row.last_solve else "—" }}</td>
+                </tr>
+                {% else %}
+                <tr><td colspan="5" style="padding:.7em; color:#aaa;">Brak uczestników.</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    {% if tournament.competition_type == "team" %}
+    <header class="major" style="margin-top:2em;"><h2>Ranking drużynowy</h2></header>
+    <div style="overflow-x:auto;">
+        <table style="width:100%; min-width:620px; border-collapse:collapse;">
+            <thead><tr style="text-align:left; border-bottom:2px solid #555;"><th style="padding:.7em;">Miejsce</th><th style="padding:.7em;">Drużyna</th><th style="padding:.7em;">Punkty</th><th style="padding:.7em;">Rozwiązania</th><th style="padding:.7em;">Ostatnie rozwiązanie</th></tr></thead>
+            <tbody>
+                {% for row in team_board %}
+                <tr style="border-bottom:1px solid #444;">
+                    <td style="padding:.7em;">{{ row.rank }}</td><td style="padding:.7em;">{{ row.name }}</td><td style="padding:.7em;">{{ row.points }}</td><td style="padding:.7em;">{{ row.solves }}</td>
+                    <td style="padding:.7em;">{{ row.last_solve.strftime("%Y-%m-%d %H:%M:%S") if row.last_solve else "—" }}</td>
+                </tr>
+                {% else %}
+                <tr><td colspan="5" style="padding:.7em; color:#aaa;">Brak zgłoszonych drużyn.</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% endif %}
+    <div style="text-align:center; margin-top:2em;"><a href="/tournaments" class="button alt">Wróć do turniejów</a></div>
+</section>
+<script>
+(function () {
+    const element = document.getElementById("tournament-detail-countdown");
+    if (!element) return;
+    function update() {
+        const target = Date.parse(element.dataset.target);
+        const seconds = Math.floor((target - Date.now()) / 1000);
+        if (Number.isNaN(target)) {
+            element.textContent = "Nie można odczytać terminu";
+        } else if (seconds <= 0) {
+            element.textContent = "Turniej już wystartował lub zakończył się";
+        } else {
+            const days = Math.floor(seconds / 86400);
+            const hours = Math.floor((seconds % 86400) / 3600);
+            const minutes = Math.floor((seconds % 3600) / 60);
+            const rest = seconds % 60;
+            element.textContent = "Do startu: " + days + "d " + hours + "h " + minutes + "m " + rest + "s";
+        }
+    }
+    update();
+    window.setInterval(update, 1000);
+})();
+</script>
+{% endblock %}

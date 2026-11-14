@@ -100,3 +100,10 @@ Ten dokument opisuje rolę plików dodanych lub zmienionych w ramach rozbudowy p
 3. Zachowaj oryginalne grafiki, fonty i biblioteki JS motywu ZeroFour; nie trzeba ich nadpisywać.
 4. Przed pierwszym uruchomieniem wykonaj `python migrate_achievements.py`. Skrypt uruchamia wcześniejsze migracje automatycznie.
 5. SQL Injection w CyberShop jest celową podatnością ćwiczeniową i powinien być dostępny wyłącznie przez odizolowane laboratorium Docker.
+
+
+## Etap 7 – turnieje CTF i drużyny
+
+Dodano moduły `tournament_models.py`, `tournament_service.py`, `tournament_routes.py` oraz migrację `migrate_tournaments.py`. Administrator może tworzyć i zamykać turnieje, wybierać zadania, ustalać terminy UTC i limit zgłoszeń. Użytkownicy tworzą drużyny, zapraszają członków i przekazują przywództwo. Turnieje obsługują tryb indywidualny i drużynowy; w drużynowym dostępny jest osobny ranking graczy i zespołów.
+
+Punkty turniejowe są zapisywane w tabeli `tournament_solves` i nie zmieniają globalnych punktów ani XP. Zestaw zadań i wartości punktowe są utrwalane przy tworzeniu turnieju. Nowe widoki to `teams.html`, `tournaments.html`, `tournament_detail.html`, `admin_tournaments.html` i `admin_tournament_detail.html`. Testy etapu znajdują się w `test_tournaments.py`.

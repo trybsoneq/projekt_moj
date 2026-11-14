@@ -28,9 +28,11 @@ from migrate_docker import migrate as migrate_docker
 from migrate_activity import migrate as migrate_activity
 from migrate_hints import migrate as migrate_hints
 from migrate_achievements import migrate as migrate_achievements
+from migrate_tournaments import migrate as migrate_tournaments
 from hint_routes import router as hint_router
 from hint_service import HintError, get_hint_view, save_challenge_hints
 from activity_routes import router as activity_router
+from tournament_routes import router as tournament_router
 from activity_service import (
     MAX_FLAG_ATTEMPTS_PER_MINUTE,
     SubmissionRateLimitError,
@@ -50,6 +52,7 @@ app.include_router(instance_router)
 app.include_router(infrastructure_router)
 app.include_router(activity_router)
 app.include_router(hint_router)
+app.include_router(tournament_router)
 logger = logging.getLogger(__name__)
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -120,6 +123,7 @@ migrate_activity()
 init_database()
 migrate_hints()
 migrate_achievements()
+migrate_tournaments()
 
 
 async def _instance_cleanup_worker():
@@ -591,7 +595,14 @@ def check_flag(
         )
 
     if result["already_solved"]:
-        message = "Już rozwiązałeś to zadanie!"
+        tournament_points = result.get("tournament_points_awarded", 0)
+        if tournament_points:
+            message = (
+                "Zadanie było już rozwiązane globalnie, ale zaliczono je do aktywnego turnieju! "
+                f"+{tournament_points} pkt turniejowych."
+            )
+        else:
+            message = "Już rozwiązałeś to zadanie!"
         solved = True
     elif result["is_correct"]:
         xp_gained = result.get("base_xp_awarded", 0) + result.get("bonus_xp_awarded", 0)
@@ -605,6 +616,9 @@ def check_flag(
             message += f" Nowe osiągnięcia: {names}."
         if result.get("current_streak", 0):
             message += f" Seria rozwiązań: {result['current_streak']} dni."
+        tournament_points = result.get("tournament_points_awarded", 0)
+        if tournament_points:
+            message += f" +{tournament_points} pkt turniejowych."
         solved = True
     else:
         message = "Niepoprawna flaga! Próba została zapisana w historii."

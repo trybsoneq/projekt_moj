@@ -185,3 +185,10 @@ class ChallengeInstance(Base):
         Index("ix_challenge_instances_user_status", "user_id", "status"),
         Index("ix_challenge_instances_expiry", "status", "expires_at"),
     )
+
+
+# Register team and tournament tables on the shared SQLAlchemy metadata.
+from tournament_models import (  # noqa: F401,E402
+    Team, TeamMember, TeamInvitation, Tournament, TournamentChallenge,
+    TournamentParticipant, TournamentTeamParticipant, TournamentSolve,
+)

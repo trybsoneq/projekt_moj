@@ -1,0 +1,78 @@
+{% extends "zerofour/base.html" %}
+
+{% block banner %}
+<div id="banner" style="text-align:center;">
+    <h2>Turnieje CTF</h2>
+    <p>Rywalizuj indywidualnie albo razem ze swoją drużyną. Wyniki turniejów są niezależne od globalnego rankingu.</p>
+</div>
+{% endblock %}
+
+{% block content %}
+<section class="container box" style="max-width:1050px; margin:0 auto 2em; padding:2em;">
+    {% if message %}
+    <div style="padding:1em; margin-bottom:1.5em; border:1px solid #438b67; border-radius:8px; color:#8ce0ae;">{{ message }}</div>
+    {% endif %}
+    {% if tournament_rows %}
+        {% for row in tournament_rows %}
+        <article style="padding:1.25em; border:1px solid #444; border-radius:10px; margin-bottom:1em;">
+            <div style="display:flex; align-items:flex-start; justify-content:space-between; flex-wrap:wrap; gap:1em;">
+                <div style="flex:1; min-width:240px;">
+                    <h3 style="margin:0 0 .35em;">{{ row.tournament.title }}</h3>
+                    <p style="margin:.2em 0 .8em; color:#aaa;">{{ row.tournament.description or "Brak opisu turnieju." }}</p>
+                    <div style="font-size:.9em; color:#aaa;">
+                        {% if row.tournament.competition_type == "team" %}Turniej drużynowy{% else %}Turniej indywidualny{% endif %}
+                        · {{ row.challenge_count }} zadań · {{ row.participant_count }} / {{ row.tournament.max_participants or "∞" }} uczestników
+                    </div>
+                    <div style="font-size:.85em; color:#888; margin-top:.4em;">
+                        Start: {{ row.tournament.starts_at.strftime("%Y-%m-%d %H:%M") }} UTC
+                        · Koniec: {{ row.tournament.ends_at.strftime("%Y-%m-%d %H:%M") }} UTC
+                    </div>
+                    {% if row.tournament.status == "open" %}
+                    <div class="tournament-countdown" data-target="{{ row.tournament.starts_at.strftime("%Y-%m-%dT%H:%M:%SZ") }}" style="color:#70c2ff; margin-top:.4em;">Ładowanie odliczania…</div>
+                    {% endif %}
+                </div>
+                <div style="text-align:right;">
+                    {% if row.tournament.status == "draft" %}
+                        <span style="color:#aaa;">Szkic</span>
+                    {% elif row.tournament.status == "open" %}
+                        <span style="color:#70c2ff;">Zapisy otwarte</span>
+                    {% else %}
+                        <span style="color:#8ce0ae;">Zakończony</span>
+                    {% endif %}
+                    {% if row.is_joined %}<div style="color:#8ce0ae; margin-top:.35em;">Zapisano</div>{% endif %}
+                    <a href="/tournaments/{{ row.tournament.id }}" class="button" style="margin-top:.75em;">Szczegóły i ranking</a>
+                </div>
+            </div>
+        </article>
+        {% endfor %}
+    {% else %}
+        <p style="text-align:center; color:#aaa;">Nie utworzono jeszcze żadnego turnieju.</p>
+    {% endif %}
+    <div style="text-align:center; margin-top:2em;">
+        <a href="/teams" class="button alt">Zarządzaj drużyną</a>
+    </div>
+</section>
+<script>
+(function () {
+    function updateCountdown(element) {
+        const target = Date.parse(element.dataset.target);
+        const seconds = Math.floor((target - Date.now()) / 1000);
+        if (Number.isNaN(target)) {
+            element.textContent = "Nie można odczytać terminu";
+        } else if (seconds <= 0) {
+            element.textContent = "Turniej już wystartował lub zakończył się";
+        } else {
+            const days = Math.floor(seconds / 86400);
+            const hours = Math.floor((seconds % 86400) / 3600);
+            const minutes = Math.floor((seconds % 3600) / 60);
+            const rest = seconds % 60;
+            element.textContent = "Start za: " + days + "d " + hours + "h " + minutes + "m " + rest + "s";
+        }
+    }
+    document.querySelectorAll(".tournament-countdown").forEach(function (element) {
+        updateCountdown(element);
+        window.setInterval(function () { updateCountdown(element); }, 1000);
+    });
+})();
+</script>
+{% endblock %}

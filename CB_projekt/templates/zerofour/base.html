@@ -31,11 +31,17 @@
                                 <li {% if active_page == 'scoreboard' %}class="current_page_item"{% endif %}>
                                     <a href="/scoreboard">Scoreboard</a>
                                 </li>
+                                <li {% if active_page == 'tournaments' %}class="current_page_item"{% endif %}>
+                                    <a href="/tournaments">Turnieje</a>
+                                </li>
                                 <li {% if active_page == 'rules' %}class="current_page_item"{% endif %}>
                                     <a href="/rules">Zasady i FAQ</a>
                                 </li>
                                 
                                 {% if username %}
+                                    <li {% if active_page == 'teams' %}class="current_page_item"{% endif %}>
+                                        <a href="/teams">Drużyny</a>
+                                    </li>
                                     {% if is_admin|default(false) or username == 'admin' %}
                                         <li {% if active_page == 'admin' %}class="current_page_item"{% endif %}>
                                             <a href="/admin" style="color: #66b3ff;">Panel Administratora</a>
@@ -45,6 +51,9 @@
                                         </li>
                                         <li {% if active_page == 'admin_activity' %}class="current_page_item"{% endif %}>
                                             <a href="/admin/activity" style="color: #66b3ff;">Analiza aktywności</a>
+                                        </li>
+                                        <li {% if active_page == 'admin_tournaments' %}class="current_page_item"{% endif %}>
+                                            <a href="/admin/tournaments" style="color: #66b3ff;">Turnieje — panel</a>
                                         </li>
                                     {% endif %}
                                     
